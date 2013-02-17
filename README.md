@@ -35,20 +35,20 @@ capable of running a python script should work.
 * `mysql> GRANT ALL PRIVILEGES ON beomon.* TO 'beomon'@'%.francis.sam.pitt.edu' IDENTIFIED BY 'somepass';`
 * `mysql> FLUSH PRIVILEGES;`
 * `mysql> USE beomon;`
-* `mysql> CREATE TABLE beomon (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_count INT, \
-* moab VARCHAR(50), moab_count INT, infiniband VARCHAR(50), infiniband_count INT, tempurature VARCHAR(50), \
-* tempurature_count INT, scratch VARCHAR(50), scratch_count INT, panasas VARCHAR(50), panasas_count INT, \
-* home VARCHAR(50), home_count INT, home1 VARCHAR(50), home1_count INT, home2 VARCHAR(50), home2_count INT, \
-* home3 VARCHAR(50), home3_count INT, gscratch0 VARCHAR(50), gscratch0_count INT, gscratch1 VARCHAR(50), \
-* gscratch1_count INT, datasam VARCHAR(50), datasam_count INT, datapkg VARCHAR(50), datapkg_count INT, \
-* cpu_type VARCHAR(50), cpu_num INT, gpu BOOL, ib BOOL, scratch_size INT, ram INT, serial VARCHAR(50), \
-* last_check BIGINT);`
+* `mysql> CREATE TABLE beomon (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_count INT, \`
+* `moab VARCHAR(50), moab_count INT, infiniband VARCHAR(50), infiniband_count INT, tempurature VARCHAR(50), \`
+* `tempurature_count INT, scratch VARCHAR(50), scratch_count INT, panasas VARCHAR(50), panasas_count INT, \`
+* `home VARCHAR(50), home_count INT, home1 VARCHAR(50), home1_count INT, home2 VARCHAR(50), home2_count INT, \`
+* `home3 VARCHAR(50), home3_count INT, gscratch0 VARCHAR(50), gscratch0_count INT, gscratch1 VARCHAR(50), \`
+* `gscratch1_count INT, datasam VARCHAR(50), datasam_count INT, datapkg VARCHAR(50), datapkg_count INT, \`
+* `cpu_type VARCHAR(50), cpu_num INT, gpu BOOL, ib BOOL, scratch_size INT, ram INT, serial VARCHAR(50), \`
+* `last_check BIGINT);`
 
 
 ### Configure Apache httpd
 
 * `yum install httpd`
-* ...
+* `...`
 
 ### Running the programs
 
