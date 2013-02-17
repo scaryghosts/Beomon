@@ -23,19 +23,19 @@ RHLE6/CentOS6 and assumes /opt/sam is available to all nodes.  Any Web server
 capable of running a python script should work.
 
 ### Prepare the database
-`yum install mysql-server mysql MySQL-python`
-`rsync -Pah /usr/lib64/python2.6/site-packages/MySQLdb /opt/sam/beomon/modules/`
-`rsync -Pah /usr/lib64/python2.6/site-packages/_mysql* /opt/sam/beomon/modules/`
-`echo 'somepass' > /opt/sam/beomon/beomonpass.txt`
-`chmod 600 /opt/sam/beomon/beomonpass.txt`
-`service mysqld start`
-`/usr/bin/mysql_secure_installation`
-`mysql> CREATE DATABASE beomon;`
-`mysql> GRANT ALL PRIVILEGES ON beomon.* TO 'beomon'@'10.54.50.%' IDENTIFIED BY 'somepass';`
-`mysql> GRANT ALL PRIVILEGES ON beomon.* TO 'beomon'@'%.francis.sam.pitt.edu' IDENTIFIED BY 'somepass';`
-`mysql> FLUSH PRIVILEGES;`
-`mysql> USE beomon;`
-`mysql> CREATE TABLE beomon (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_count INT, \
+* `yum install mysql-server mysql MySQL-python`
+* `rsync -Pah /usr/lib64/python2.6/site-packages/MySQLdb /opt/sam/beomon/modules/`
+* `rsync -Pah /usr/lib64/python2.6/site-packages/_mysql* /opt/sam/beomon/modules/`
+* `echo 'somepass' > /opt/sam/beomon/beomonpass.txt`
+* `chmod 600 /opt/sam/beomon/beomonpass.txt`
+* `service mysqld start`
+* `/usr/bin/mysql_secure_installation`
+* `mysql> CREATE DATABASE beomon;`
+* `mysql> GRANT ALL PRIVILEGES ON beomon.* TO 'beomon'@'10.54.50.%' IDENTIFIED BY 'somepass';`
+* `mysql> GRANT ALL PRIVILEGES ON beomon.* TO 'beomon'@'%.francis.sam.pitt.edu' IDENTIFIED BY 'somepass';`
+* `mysql> FLUSH PRIVILEGES;`
+* `mysql> USE beomon;`
+* `mysql> CREATE TABLE beomon (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_count INT, \
 moab VARCHAR(50), moab_count INT, infiniband VARCHAR(50), infiniband_count INT, tempurature VARCHAR(50), \
 tempurature_count INT, scratch VARCHAR(50), scratch_count INT, panasas VARCHAR(50), panasas_count INT, \
 home VARCHAR(50), home_count INT, home1 VARCHAR(50), home1_count INT, home2 VARCHAR(50), home2_count INT, \
