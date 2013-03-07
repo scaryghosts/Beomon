@@ -35,22 +35,23 @@ capable of running a python script should work.
 * `mysql> GRANT ALL PRIVILEGES ON beomon.* TO 'beomon'@'%.francis.sam.pitt.edu' IDENTIFIED BY 'somepass';`
 * `mysql> FLUSH PRIVILEGES;`
 * `mysql> USE beomon;`
-* `mysql> CREATE TABLE beomon (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_count INT, \`
-`moab VARCHAR(50), moab_count INT, infiniband VARCHAR(50), infiniband_count INT, tempurature VARCHAR(50), \`
-`tempurature_count INT, scratch VARCHAR(50), scratch_count INT, panasas VARCHAR(50), panasas_count INT, \`
-`home VARCHAR(50), home_count INT, home1 VARCHAR(50), home1_count INT, home2 VARCHAR(50), home2_count INT, \`
-`home3 VARCHAR(50), home3_count INT, gscratch0 VARCHAR(50), gscratch0_count INT, gscratch1 VARCHAR(50), \`
-`gscratch1_count INT, datasam VARCHAR(50), datasam_count INT, datapkg VARCHAR(50), datapkg_count INT, \`
-`cpu_type VARCHAR(50), cpu_num INT, gpu BOOL, ib BOOL, scratch_size INT, ram INT, serial VARCHAR(50), \`
-`last_check BIGINT);`
+* `mysql> CREATE TABLE beomon (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_time BIGINT, `
+`moab VARCHAR(50), infiniband VARCHAR(50), tempurature VARCHAR(50), scratch VARCHAR(50), panasas VARCHAR(50), `
+`home VARCHAR(50), home1 VARCHAR(50), home2 VARCHAR(50), home3 VARCHAR(50), home4 VARCHAR(50), home5 VARCHAR(50), `
+`gscratch0 VARCHAR(50), gscratch1 VARCHAR(50), gscratch2 VARCHAR(50), gscratch3 VARCHAR(50), gscratch4 VARCHAR(50), `
+`gscratch5 VARCHAR(50), datasam VARCHAR(50), datapkg VARCHAR(50), cpu_type VARCHAR(100), cpu_num INT, gpu BOOL, `
+`scratch_size VARCHAR(50), ram VARCHAR(50), serial VARCHAR(50), last_check BIGINT);`
 
 
 ### Configure Apache httpd
 
 * `yum install httpd`
-* `...`
+* Add "LoadModule cgi_module modules/mod_cgi.so" to the configuration
+* Add "ScriptAlias /nodes /path/to/cgiroot/beomon_display.py" to the configuration
+* Ensure the user httpd runs as can execute the program
+* Go to http://your.web.server/nodes
 
-### Running the programs
+### The programs
 
 beomon_master_agent.py is ran on the master/head node of the cluster.  This 
 program checks the status (up, down, boot, error) of compute nodes and 
@@ -58,8 +59,29 @@ updates the database.  Pass a string to the -n flag of which nodes to check.
 
 Example: `beomon_master_agent.py 0-5,7-9`
 
+
 beomon_compute_node_agent.py is ran on each compute node and check the status
 of Infiniband, mount points, CPU/system temperature, etc.  It can be ran via
-the master/head node.
+the master/head node with:
 
-Example: `beorun --all-nodes --nolocal beomon_compute_node_agent.py`
+`beorun --all-nodes --nolocal beomon_compute_node_agent.py`
+
+However, it is designed to be started in daemon mode on each compute node as they boot
+with `99zzzbeomon`.  Note that in daemon mode the health is only checked once.  From then 
+on every 5 minutes it will only update the DB saying it checked in.
+
+
+99zzzbeomon is a Beowulf init script.  Place is in /etc/beowulf/init.d and make it executable.
+Compute nodes should run it when they boot or you can run it by hand with an argument of which
+node you want to run it on.
+
+
+beomon_display.py is a CGI script to be ran by a Web server.  This will display a table of the
+current ststus of each node.  Hover over the node number to see the node's details (CPU type, RAM 
+amount, etc.).
+
+
+beomon_statsgen.py will pull the node details (CPU type, RAM amount, etc.) out of the DB, create 
+a CSV of these details then print the totals for the cluster.
+
+Example: `beomon_statsgen.py`

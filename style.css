@@ -1,0 +1,57 @@
+table.fancy {
+  margin: auto;
+  background: whitesmoke;
+  border-collapse: collapse;
+  width: 80%
+  
+}
+table.fancy th, table.fancy td, table.fancy thead th, table.fancy thead td {
+  border: 1px silver gainsboro;
+  text-align: center;
+  padding: 0.2em;
+}
+tr:nth-child(odd) {
+  background: blue;
+  background: gainsboro;
+}
+table.fancy th {
+  background: #bcbfc2;
+  text-align: left;
+}
+table.fancy tr:hover td {
+   background: mintcream !important;
+}
+table.fancy caption {
+  margin-left: inherit;
+  margin-right: inherit;
+}
+
+body {background-color:#A4A4A4}
+
+.title {
+        text-align: center;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 20px;
+        color: #F6F2F2;
+        }
+
+
+span.dropt:hover {
+  text-decoration: none; background: #ffffff; z-index: 6;
+}
+span.dropt span {
+  position: absolute; left: -9999px;
+  margin: 20px 0 0 0px; padding: 3px 3px 3px 3px;
+  border-style:solid; border-color:black; border-width:1px; z-index: 6;
+}
+span.dropt:hover span {
+  left: 2%; background: #ffffff;
+} 
+span.dropt span {
+  position: absolute; left: -9999px;
+  margin: 4px 0 0 0px; padding: 3px 3px 3px 3px; 
+  border-style:solid; border-color:black; border-width:1px;
+}
+span.dropt:hover span {
+  margin: 20px 0 0 170px; background: #ffffff; z-index:6; 
+}
