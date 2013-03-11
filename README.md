@@ -4,7 +4,24 @@ Beomon
 Beomon is an application used to monitor the status of compute nodes in a
 Beowulf-style cluster and create a Web interface to view the status of the
 nodes.  Specifically this supports the University of Pittsburgh's HPC 
-cluster "Frank".
+cluster "Frank".  This software adds two node states not available in 
+the standard Scyld/Beowulf install: orphaned and partnered.
+
+"Orphaned" means that the compute node is still alive and checking into
+the back-end database (or at least has in the past 10 minutes).  This is
+needed to support Scyld's "run to completion" feature.  When a compute 
+node is first seen in the state "orphan" Beomon's master agent will
+prevent new jobs from being scheduled on the node.  Similarly when
+the node is first seen in the state "up" jobs scheduling will be
+enabled for the compute node.
+
+"Partnered" means that the compute node is under the control of another
+master node.  This is needed to support Scyld's active-active master
+configuration.  For example with master nodes head0a and head0b both configured
+to be a possible master of node 10, one master will consider the node 
+"partnered" while the other in control of the compute node considers
+it up, down, boot or error.  Otherwise both masters consider it down
+or orphaned when no master is in control.
 
 License
 -------
