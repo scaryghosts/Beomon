@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1
-# Last change: Initial version
+# Version: 1.1
+# Last change: Added a check of the PBS status
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -45,17 +45,17 @@ def do_sql_query(column, node):
 
 # Get the DB password
 dbpasshandle = open("/opt/sam/beomon/beomonpass.txt", "r")
-
 dbpass = dbpasshandle.read().rstrip("\n")
-
 dbpasshandle.close()
 
     
     
 # Open a DB connection
 try:
-    db = MySQLdb.connect(host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
-                                             passwd=dbpass, db="beomon")
+    db = MySQLdb.connect(
+        host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
+        passwd=dbpass, db="beomon"
+    )
                                              
     cursor = db.cursor()
     
@@ -83,6 +83,7 @@ sys.stdout.write("""Content-type: text/html
         <tr>
             <th scope="col">Node</th>
             <th scope="col">State</th>
+            <th scope="col">PBS</th>
             <th scope="col">Moab</th>
             <th scope="col">Infiniband</th>
             <th scope="col">/scratch</th>
@@ -159,7 +160,7 @@ for node in nodes:
     if state == None:
         sys.stdout.write("<td><span style='color:red'><span>unknown</span></span></td>\n")
         
-        print "<td></td>" * 11
+        print "<td></td>" * 12
         
         continue
         
@@ -171,9 +172,22 @@ for node in nodes:
         
         sys.stdout.write("<td><span style='color:red' class='dropt'>" + state + "<span>Since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(state_time)) + "</span></span></td>\n")
         
-        print "<td></td>" * 11
+        print "<td></td>" * 12
         
         continue
+        
+        
+        
+    # PBS
+    pbs_state = do_sql_query("pbs_state", node)
+    if pbs_state == None:
+        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
+        
+    elif pbs_state == "ok":
+        sys.stdout.write("<td>ok</td>\n")
+        
+    else:
+        sys.stdout.write("<td><span style='color:red'>" + pbs_state + "</span></td>\n")
         
         
         

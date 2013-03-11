@@ -42,17 +42,17 @@ def connect_mysql():
     
     # Get the DB password
     dbpasshandle = open("/opt/sam/beomon/beomonpass.txt", "r")
-
     dbpass = dbpasshandle.read().rstrip()
-
     dbpasshandle.close()
 
         
         
     # Open a DB connection
     try:
-        db = MySQLdb.connect(host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
-                                                passwd=dbpass, db="beomon")
+        db = MySQLdb.connect(
+            host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
+            passwd=dbpass, db="beomon"
+        )
                                                 
         return db
         

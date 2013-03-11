@@ -55,17 +55,17 @@ csv_handle.write("Node, CPU Type, CPU Core Count, GPU?, Infiniband?, Scratch Amo
 
 # Get the DB password
 dbpasshandle = open("/opt/sam/beomon/beomonpass.txt", "r")
-
 dbpass = dbpasshandle.read().rstrip("\n")
-
 dbpasshandle.close()
 
     
     
 # Open a DB connection
 try:
-    db = MySQLdb.connect(host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
-                                             passwd=dbpass, db="beomon")
+    db = MySQLdb.connect(
+        host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
+        passwd=dbpass, db="beomon"
+    )
                                              
     cursor = db.cursor()
     

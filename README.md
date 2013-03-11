@@ -55,11 +55,11 @@ capable of running a python script should work.
 * `mysql> FLUSH PRIVILEGES;`
 * `mysql> USE beomon;`
 * `mysql> CREATE TABLE beomon (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_time BIGINT, `
-`moab VARCHAR(50), infiniband VARCHAR(50), tempurature VARCHAR(50), scratch VARCHAR(50), panasas VARCHAR(50), `
-`home VARCHAR(50), home1 VARCHAR(50), home2 VARCHAR(50), home3 VARCHAR(50), home4 VARCHAR(50), home5 VARCHAR(50), `
-`gscratch0 VARCHAR(50), gscratch1 VARCHAR(50), gscratch2 VARCHAR(50), gscratch3 VARCHAR(50), gscratch4 VARCHAR(50), `
-`gscratch5 VARCHAR(50), datasam VARCHAR(50), datapkg VARCHAR(50), cpu_type VARCHAR(100), cpu_num INT, gpu BOOL, `
-`scratch_size VARCHAR(50), ram VARCHAR(50), serial VARCHAR(50), last_check BIGINT);`
+`pbs_state VARCHAR(50), moab VARCHAR(50), infiniband VARCHAR(50), tempurature VARCHAR(50), scratch VARCHAR(50), `
+`panasas VARCHAR(50), home VARCHAR(50), home1 VARCHAR(50), home2 VARCHAR(50), home3 VARCHAR(50), home4 VARCHAR(50), `
+`home5 VARCHAR(50), gscratch0 VARCHAR(50), gscratch1 VARCHAR(50), gscratch2 VARCHAR(50), gscratch3 VARCHAR(50), `
+`gscratch4 VARCHAR(50), gscratch5 VARCHAR(50), datasam VARCHAR(50), datapkg VARCHAR(50), cpu_type VARCHAR(100), `
+`cpu_num INT, gpu BOOL, scratch_size VARCHAR(50), ram VARCHAR(50), serial VARCHAR(50), last_check BIGINT);`
 
 
 ### Configure Apache httpd
@@ -90,13 +90,13 @@ with `99zzzbeomon`.  Note that in daemon mode the health is only checked once.  
 on every 5 minutes it will only update the DB saying it checked in.
 
 
-99zzzbeomon is a Beowulf init script.  Place is in /etc/beowulf/init.d and make it executable.
+99zzzbeomon is a Beowulf init script.  Place it in /etc/beowulf/init.d and make it executable.
 Compute nodes should run it when they boot or you can run it by hand with an argument of which
 node you want to run it on.
 
 
 beomon_display.py is a CGI script to be ran by a Web server.  This will display a table of the
-current ststus of each node.  Hover over the node number to see the node's details (CPU type, RAM 
+current status of each node.  Hover over the node number to see the node's details (CPU type, RAM 
 amount, etc.).
 
 

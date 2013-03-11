@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1
-# Last change: Initial version
+# Version: 1.1
+# Last change: Added a check of the PBS status
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -28,7 +28,8 @@ num_state = {
     "error" : 0,
     "orphan" : 0,
     "up" : 0,
-    "partnered" : 0
+    "partnered" : 0,
+    "pbs_offline" : 0
 }
 
 
@@ -69,17 +70,17 @@ syslog.openlog(os.path.basename(sys.argv[0]), syslog.LOG_NOWAIT, syslog.LOG_DAEM
     
 # Get the DB password
 dbpasshandle = open("/opt/sam/beomon/beomonpass.txt", "r")
-
 dbpass = dbpasshandle.read().rstrip()
-
 dbpasshandle.close()
 
     
     
 # Open a DB connection
 try:
-    db = MySQLdb.connect(host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
-                                             passwd=dbpass, db="beomon")
+    db = MySQLdb.connect(
+        host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
+        passwd=dbpass, db="beomon"
+    )
                                              
     cursor = db.cursor()
     
@@ -137,8 +138,12 @@ for line in bpstat_out.split(os.linesep):
         
     sys.stdout.write("Node: " + node + "\n")
     
+    state = ""
+    
     
     if status == "up":
+        state = "up"
+        
         num_state["up"] += 1
         
         # Get the last state and see if it matches the current state
@@ -169,15 +174,16 @@ for line in bpstat_out.split(os.linesep):
                 err = stderr.read()
                 stderr.close()
                 
-                status = channel.recv_exit_status()
-                
                 if err:
                     sys.stderr.write("Err: " + err)
-                
+
+                status = channel.recv_exit_status()
+                    
                 if status != 0:
                     raise Exception("Non-zero exit status: " + str(status))
                     
                 stdin.close()
+                stdout.close()
                 
                 # Done!
                 channel.close()
@@ -222,11 +228,11 @@ for line in bpstat_out.split(os.linesep):
             err = stderr.read()
             stderr.close()
             
-            status = channel.recv_exit_status()
-
             # Check the status
             if err:
                 sys.stderr.write("Err: " + err)
+
+            status = channel.recv_exit_status()
                 
             if status != 0:
                 raise Exception("Non-zero exit status: " + str(status))
@@ -248,6 +254,8 @@ for line in bpstat_out.split(os.linesep):
                     
                 else:
                     found_partner_status = False
+                    
+            stdout.close()
             
             # Done!
             channel.close()
@@ -260,6 +268,8 @@ for line in bpstat_out.split(os.linesep):
         
 
         if found_partner_status == True:
+            state = "partnered"
+            
             num_state["partnered"] += 1
 
             sys.stdout.write("State: partnered\n")
@@ -267,6 +277,8 @@ for line in bpstat_out.split(os.linesep):
         
         # If the node checked in within the last 10 minutes, consider it an orphan
         elif last_check > (int(time.time()) - 600):
+            state = "orphan"
+            
             num_state["orphan"] += 1
             
             if last_state == "orphan":
@@ -285,13 +297,13 @@ for line in bpstat_out.split(os.linesep):
                     
                     ssh.load_system_host_keys()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+                    ssh.connect("clusman0-dev.francis.sam.pitt.edu")
+                    channel = ssh.get_transport().open_session()
                     
                     stdin = channel.makefile("wb", 1024)
                     stdout = channel.makefile("rb", 1024)
                     stderr = channel.makefile_stderr("rb", 1024)
-                    
-                    ssh.connect("clusman0-dev.francis.sam.pitt.edu")
-                    channel = ssh.get_transport().open_session()
                     
                     channel.exec_command("/usr/bin/pbsnodes -o n" + node + "; exit $?")
                     
@@ -299,15 +311,16 @@ for line in bpstat_out.split(os.linesep):
                     err = stderr.read()
                     stderr.close()
                     
-                    status = channel.recv_exit_status()
-                    
                     if err:
                         sys.stderr.write("Err: " + err)
-                    
+
+                    status = channel.recv_exit_status()
+                        
                     if status != 0:
                         raise Exception("Non-zero exit status: " + str(status))
                         
                     stdin.close()
+                    stdout.close()
                     
                     # Done!
                     channel.close()
@@ -321,6 +334,8 @@ for line in bpstat_out.split(os.linesep):
         
         # The node has not checked in within the last 10 minutes, it's down
         else:
+            state = "down"
+            
             num_state["down"] += 1
             
             if last_state == "down":
@@ -340,6 +355,8 @@ for line in bpstat_out.split(os.linesep):
                 
             
     elif status == "boot":
+        state = "boot"
+        
         num_state["boot"] += 1
         
         # Get the last state and see if it matches the current state
@@ -361,6 +378,8 @@ for line in bpstat_out.split(os.linesep):
         
         
     elif status == "error":
+        state = "error"
+        
         num_state["error"] += 1
         
         # Get the last state and see if it matches the current state
@@ -377,6 +396,78 @@ for line in bpstat_out.split(os.linesep):
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " is not up, state: error")
 
         
+    
+    #
+    # Check the PBS state
+    #
+    if state == "up":
+        try:
+            ssh = paramiko.SSHClient()
+            
+            ssh.load_system_host_keys()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            ssh.connect("clusman0-dev.francis.sam.pitt.edu")
+            channel = ssh.get_transport().open_session()
+            
+            stdin = channel.makefile("wb", 1024)
+            stdout = channel.makefile("rb", 1024)
+            stderr = channel.makefile_stderr("rb", 1024)
+            
+            channel.exec_command("/usr/bin/pbsnodes -q n" + node + "; exit $?")
+            
+            # Check for errors
+            err = stderr.read()
+            stderr.close()
+            
+            if err:
+                sys.stderr.write(err)
+
+            status = channel.recv_exit_status()
+                
+            if status != 0:
+                raise Exception("Non-zero exit status: " + str(status))
+                
+            stdin.close()
+            
+            for line in stdout.read().split(os.linesep):
+                line = line.rstrip()
+                
+                match = re.match("^\s+state", line)
+                
+                if not match:
+                    continue
+                
+                pbs_state = line.split()[2]
+                
+                if pbs_state == "offline":
+                    sys.stderr.write("PBS: Offline\n")
+                    
+                    num_state["pbs_offline"] += 1
+                    
+                    cursor.execute("UPDATE beomon SET pbs_state='offline' WHERE node_id=" + node)
+                    
+                elif pbs_state == "down":
+                    sys.stderr.write("PBS: Down\n")
+                    
+                    cursor.execute("UPDATE beomon SET pbs_state='down' WHERE node_id=" + node)
+                    
+                else:
+                    sys.stderr.write("PBS: OK\n")
+                    
+                    cursor.execute("UPDATE beomon SET pbs_state='ok' WHERE node_id=" + node)
+                    
+            stdout.close()
+            
+            # Done!
+            channel.close()
+            ssh.close()
+            
+        except Exception, err:
+            sys.stderr.write("Failed to check PBS state node with `pbsnodes` on clusman0-dev.francis.sam.pitt.edu: " + str(err) + "\n")
+
+            cursor.execute("UPDATE beomon SET pbs_state=NULL WHERE node_id=" + node)
+    
     
     sys.stdout.write("\n")
     
@@ -415,6 +506,15 @@ if num_state["error"] >= 10:
     
 elif num_state["error"] > 0:
     sys.stdout.write(str(num_state["error"]) + " nodes in state 'error'\n")
+    
+    
+if num_state["pbs_offline"] >= 10:
+    sys.stdout.write("WARNING: " + str(num_state["pbs_offline"]) + " nodes PBS state 'offline'!\n")
+    
+    syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-ALERT: 10 or more nodes with PBS state 'offline'")
+    
+elif num_state["pbs_offline"] > 0:
+    sys.stdout.write(str(num_state["pbs_offline"]) + " nodes with PBS state 'offline'\n")
     
 
 sys.stdout.write(str(num_state["partnered"]) + " nodes in state 'partnered'\n")
