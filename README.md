@@ -23,6 +23,8 @@ to be a possible master of node 10, one master will consider the node
 it up, down, boot or error.  Otherwise both masters consider it down
 or orphaned when no master is in control.
 
+[![Beomon Display](display_screenshot.jpg)]
+
 License
 -------
 
