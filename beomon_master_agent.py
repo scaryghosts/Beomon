@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1
-# Last change: Added a check of the PBS status
+# Version: 1.2
+# Last change: Added check for stale last check in value
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -466,7 +466,25 @@ for line in bpstat_out.split(os.linesep):
         except Exception, err:
             sys.stderr.write("Failed to check PBS state node with `pbsnodes` on clusman0-dev.francis.sam.pitt.edu: " + str(err) + "\n")
 
+            syslog.syslog(syslog.LOG_WARNING, "Failed to check PBS state node with `pbsnodes` on clusman0-dev.francis.sam.pitt.edu for node: " + node)
+            
             cursor.execute("UPDATE beomon SET pbs_state=NULL WHERE node_id=" + node)
+    
+    
+    
+    #
+    # Verify that the node is still checking in if it is up
+    #    
+    if state == "up":
+        last_check = do_sql_query("last_check", node)
+        
+        checkin_seconds_diff = int(time.time()) - int(last_check)
+        
+        if checkin_seconds_diff >= 3600: # 1 hour
+            sys.stderr.write("Node " + str(node) + " last check in time is stale (last checked in " + str(checkin_seconds_diff) + " seconds ago)\n")
+            
+            syslog.syslog(syslog.LOG_WARNING, "Node " + str(node) + " last check in time is stale (last checked in " + str(checkin_seconds_diff) + " seconds ago)")
+    
     
     
     sys.stdout.write("\n")
