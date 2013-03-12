@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1.1
-# Last change: Added additional mount points to check
+# Version: 1.1.2
+# Last change: Changed the filesystem section to a dictionary loop
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -87,17 +87,16 @@ sys.stdout.write("""Content-type: text/html
             <th scope="col">Moab</th>
             <th scope="col">Infiniband</th>
             <th scope="col">/scratch</th>
-            <th scope="col">/pan</th>
+            <th scope="col">/data/pkg</th>
+            <th scope="col">/data/sam</th>
+            <th scope="col">/gscratch1</th>
             <th scope="col">/home</th>
             <th scope="col">/home1</th>
             <th scope="col">/home2</th>
-            <th scope="col">/gscratch0</th>
-            <th scope="col">/gscratch1</th>
-            <th scope="col">/data/sam</th>
-            <th scope="col">/data/pkg</th>
             <th scope="col">/lchong/home</th>
             <th scope="col">/lchong/archive</th>
             <th scope="col">/lchong/work</th>
+            <th scope="col">/pan</th>
         </tr>
     </thead>
     <tbody>
@@ -163,7 +162,7 @@ for node in nodes:
     if state == None:
         sys.stdout.write("<td><span style='color:red'><span>unknown</span></span></td>\n")
         
-        print "<td></td>" * 15
+        print "<td></td>" * 14
         
         continue
         
@@ -175,7 +174,7 @@ for node in nodes:
         
         sys.stdout.write("<td><span style='color:red' class='dropt'>" + state + "<span>Since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(state_time)) + "</span></span></td>\n")
         
-        print "<td></td>" * 15
+        print "<td></td>" * 14
         
         continue
         
@@ -246,146 +245,32 @@ for node in nodes:
 
         
         
-    # /pan
-    panasas = do_sql_query("panasas", node)
-    if panasas == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif panasas == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + panasas + "</span></td>\n")
-        
-        
-        
-    # /home
-    home = do_sql_query("home", node)
-    if home == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif home == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + home + "</span></td>\n")
-        
-        
-        
-    # /home1
-    home1 = do_sql_query("home1", node)
-    if home1 == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif home1 == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + home1 + "</span></td>\n")
-        
-        
+    # Filesystems to check
+    filesystems = {
+        "/data/pkg" : "datapkg",
+        "/data/sam" : "datasam",
+        "/gscratch1" : "gscratch1",
+        "/home" : "home0",
+        "/home1" : "home1",
+        "/home2" : "home2",
+        "/lchong/archive" : "lchong_archive",
+        "/lchong/home" : "lchong_home",
+        "/lchong/work" : "lchong_work",
+        "/pan" : "panasas",
+    }
 
-    # /home2
-    home2 = do_sql_query("home2", node)
-    if home2 == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
+    
+    for mount_point in sorted(filesystems.iterkeys()):
+        mount_status = do_sql_query(filesystems[mount_point], node)
         
-    elif home2 == "ok":
-        sys.stdout.write("<td>ok</td>\n")
+        if mount_status == None:
+            sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
         
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + home2 + "</span></td>\n")
+        elif mount_status == "ok":
+            sys.stdout.write("<td>ok</td>\n")
         
-        
-        
-    # /gscratch0
-    gscratch0 = do_sql_query("gscratch0", node)
-    if gscratch0 == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif gscratch0 == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + gscratch0 + "</span></td>\n")
-        
-        
- 
-    # /gscratch1
-    gscratch1 = do_sql_query("gscratch1", node)
-    if gscratch1 == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif gscratch1 == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + gscratch1 + "</span></td>\n")
-        
-        
-        
-    # /data/sam
-    datasam = do_sql_query("datasam", node)
-    if datasam == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif datasam == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + datasam + "</span></td>\n")
-        
-        
-        
-    # /data/pkg
-    datapkg = do_sql_query("datapkg", node)
-    if datapkg == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif datapkg == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + datapkg + "</span></td>\n")
-        
-        
-        
-    # /lchong/home
-    lchong_home = do_sql_query("lchong_home", node)
-    if lchong_home == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif lchong_home == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + lchong_home + "</span></td>\n")
-        
-        
-        
-    # /lchong/archive
-    lchong_archive = do_sql_query("lchong_archive", node)
-    if lchong_archive == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif lchong_archive == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + lchong_archive + "</span></td>\n")
-        
-        
-        
-    # /lchong/work
-    lchong_work = do_sql_query("lchong_work", node)
-    if lchong_work == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif lchong_work == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + lchong_work + "</span></td>\n")
+        else:
+            sys.stdout.write("<td><span style='color:red'>" + mount_status + "</span></td>\n")
         
         
         

@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.0.1
-# Last change: Added additional mount points to check
+# Version: 1.0.2
+# Last change: Changed the filesystem section to a dictionary loop
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -315,156 +315,32 @@ def check_health(db):
 
 
 
-    # /pan
-    if os.path.ismount("/pan") is True:
-        sys.stdout.write("/pan: ok\n")
-        
-        cursor.execute("UPDATE beomon SET panasas='ok' WHERE node_id=" + node)
+    # Filesystems to check
+    filesystems = {
+        "/data/pkg" : "datapkg",
+        "/data/sam" : "datasam",
+        "/gscratch1" : "gscratch1",
+        "/home" : "home0",
+        "/home1" : "home1",
+        "/home2" : "home2",
+        "/lchong/archive" : "lchong_archive",
+        "/lchong/home" : "lchong_home",
+        "/lchong/work" : "lchong_work",
+        "/pan" : "panasas",
+    }
 
-    else:
-        sys.stdout.write("/pan: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /pan in state failed")
-        
-        cursor.execute("UPDATE beomon SET panasas='failed' WHERE node_id=" + node)    
-        
-        
-        
-    # /home
-    if os.path.ismount("/home") is True:
-        sys.stdout.write("/home: ok\n")
-        
-        cursor.execute("UPDATE beomon SET home='ok' WHERE node_id=" + node)
-
-    else:
-        sys.stdout.write("/home: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /home in state failed")
-        
-        cursor.execute("UPDATE beomon SET home='failed' WHERE node_id=" + node)
-
-
-
-    # /home1
-    if os.path.ismount("/home1") is True:
-        sys.stdout.write("/home1: ok\n")
-        
-        cursor.execute("UPDATE beomon SET home1='ok' WHERE node_id=" + node)
-
-    else:
-        sys.stdout.write("/home1: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /home1 in state failed")
-     
-        cursor.execute("UPDATE beomon SET home1='failed' WHERE node_id=" + node)
-
-
-
-    # /home2
-    if os.path.ismount("/home2") is True:
-        sys.stdout.write("/home2: ok\n")
-        
-        cursor.execute("UPDATE beomon SET home2='ok' WHERE node_id=" + node)
-
-    else:
-        sys.stdout.write("/home2: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /home2 in state failed")
-        
-        cursor.execute("UPDATE beomon SET home2='failed' WHERE node_id=" + node)
-
-
-        
-    # /gscratch0
-    if os.path.ismount("/gscratch0") is True:
-        sys.stdout.write("/gscratch0: ok\n")
-        
-        cursor.execute("UPDATE beomon SET gscratch0='ok' WHERE node_id=" + node)
-    else:
-        sys.stdout.write("/gscratch0: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /gscratch0 in state failed")
-        
-        cursor.execute("UPDATE beomon SET gscratch0='failed' WHERE node_id=" + node)
+    
+    for mount_point in sorted(filesystems.iterkeys()):
+        if os.path.ismount(mount_point) is True:
+            sys.stdout.write(mount_point + ": ok\n")
             
+            cursor.execute("UPDATE beomon SET " + filesystems[mount_point] + "='ok' WHERE node_id=" + node)
+
+        else:
+            sys.stdout.write(mount_point + ": failed\n")
+            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has " + mount_point + " in state failed")
             
-            
-    # /gscratch1
-    if os.path.ismount("/gscratch1") == True:
-        sys.stdout.write("/gscratch1: ok\n")
-        
-        cursor.execute("UPDATE beomon SET gscratch1='ok' WHERE node_id=" + node)
-
-    else:
-        sys.stdout.write("/gscratch1: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /gscratch1 in state failed")
-        
-        cursor.execute("UPDATE beomon SET gscratch1='failed' WHERE node_id=" + node)
-
-
-
-    # /data/sam
-    if os.path.ismount("/data/sam") == True:
-        sys.stdout.write("/data/sam: ok\n")
-        
-        cursor.execute("UPDATE beomon SET datasam='ok' WHERE node_id=" + node)
-
-    else:
-        sys.stdout.write("/data/sam: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /data/sam in state failed")
-        
-        cursor.execute("UPDATE beomon SET datasam='failed' WHERE node_id=" + node)
-
-
-
-    # /data/pkg
-    if os.path.ismount("/data/pkg") == True:
-        sys.stdout.write("/data/pkg: ok\n")
-        
-        cursor.execute("UPDATE beomon SET datapkg='ok' WHERE node_id=" + node)
-
-    else:
-        sys.stdout.write("/data/pkg: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /data/pkg in state failed")
-        
-        cursor.execute("UPDATE beomon SET datapkg='failed' WHERE node_id=" + node)
-
-        
-        
-        # /lchong/home
-    if os.path.ismount("/lchong/home") is True:
-        sys.stdout.write("/lchong/home: ok\n")
-        
-        cursor.execute("UPDATE beomon SET lchong_home='ok' WHERE node_id=" + node)
-
-    else:
-        sys.stdout.write("/lchong/home: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /lchong/home in state failed")
-        
-        cursor.execute("UPDATE beomon SET lchong_home='failed' WHERE node_id=" + node)
-        
-        
-      
-    # /lchong/archive
-    if os.path.ismount("/lchong/archive") is True:
-        sys.stdout.write("/lchong/archive: ok\n")
-        
-        cursor.execute("UPDATE beomon SET lchong_archive='ok' WHERE node_id=" + node)
-
-    else:
-        sys.stdout.write("/lchong/archive: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /lchong/archive in state failed")
-        
-        cursor.execute("UPDATE beomon SET lchong_archive='failed' WHERE node_id=" + node)
-        
-        
-        
-    # /lchong/work
-    if os.path.ismount("/lchong/work") is True:
-        sys.stdout.write("/lchong/work: ok\n")
-        
-        cursor.execute("UPDATE beomon SET lchong_work='ok' WHERE node_id=" + node)
-
-    else:
-        sys.stdout.write("/lchong/work: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /lchong/work in state failed")
-        
-        cursor.execute("UPDATE beomon SET lchong_work='failed' WHERE node_id=" + node)
+            cursor.execute("UPDATE beomon SET " + filesystems[mount_point] + "='failed' WHERE node_id=" + node)
         
         
         
