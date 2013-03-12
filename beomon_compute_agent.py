@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1
-# Last change: Initial version
+# Version: 1.0.1
+# Last change: Added additional mount points to check
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -370,7 +370,7 @@ def check_health(db):
         cursor.execute("UPDATE beomon SET home2='failed' WHERE node_id=" + node)
 
 
-            
+        
     # /gscratch0
     if os.path.ismount("/gscratch0") is True:
         sys.stdout.write("/gscratch0: ok\n")
@@ -424,6 +424,49 @@ def check_health(db):
         
         cursor.execute("UPDATE beomon SET datapkg='failed' WHERE node_id=" + node)
 
+        
+        
+        # /lchong/home
+    if os.path.ismount("/lchong/home") is True:
+        sys.stdout.write("/lchong/home: ok\n")
+        
+        cursor.execute("UPDATE beomon SET lchong_home='ok' WHERE node_id=" + node)
+
+    else:
+        sys.stdout.write("/lchong/home: failed\n")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /lchong/home in state failed")
+        
+        cursor.execute("UPDATE beomon SET lchong_home='failed' WHERE node_id=" + node)
+        
+        
+      
+    # /lchong/archive
+    if os.path.ismount("/lchong/archive") is True:
+        sys.stdout.write("/lchong/archive: ok\n")
+        
+        cursor.execute("UPDATE beomon SET lchong_archive='ok' WHERE node_id=" + node)
+
+    else:
+        sys.stdout.write("/lchong/archive: failed\n")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /lchong/archive in state failed")
+        
+        cursor.execute("UPDATE beomon SET lchong_archive='failed' WHERE node_id=" + node)
+        
+        
+        
+    # /lchong/work
+    if os.path.ismount("/lchong/work") is True:
+        sys.stdout.write("/lchong/work: ok\n")
+        
+        cursor.execute("UPDATE beomon SET lchong_work='ok' WHERE node_id=" + node)
+
+    else:
+        sys.stdout.write("/lchong/work: failed\n")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /lchong/work in state failed")
+        
+        cursor.execute("UPDATE beomon SET lchong_work='failed' WHERE node_id=" + node)
+        
+        
         
     #    
     # General node info
@@ -605,14 +648,9 @@ else:
     db = connect_mysql()
 
     # Only run check_health() once then next time just report that we're still alive
-    first_run = True
+    check_health(db)
     
     while True:
-        if first_run is True:
-            check_health(db)
-
-            first_run = False
-
         # Report that we've now checked ourself
         cursor = db.cursor()
         cursor.execute("UPDATE beomon SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)

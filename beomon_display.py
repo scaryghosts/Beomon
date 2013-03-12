@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1
-# Last change: Added a check of the PBS status
+# Version: 1.1.1
+# Last change: Added additional mount points to check
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -95,6 +95,9 @@ sys.stdout.write("""Content-type: text/html
             <th scope="col">/gscratch1</th>
             <th scope="col">/data/sam</th>
             <th scope="col">/data/pkg</th>
+            <th scope="col">/lchong/home</th>
+            <th scope="col">/lchong/archive</th>
+            <th scope="col">/lchong/work</th>
         </tr>
     </thead>
     <tbody>
@@ -160,7 +163,7 @@ for node in nodes:
     if state == None:
         sys.stdout.write("<td><span style='color:red'><span>unknown</span></span></td>\n")
         
-        print "<td></td>" * 12
+        print "<td></td>" * 15
         
         continue
         
@@ -172,7 +175,7 @@ for node in nodes:
         
         sys.stdout.write("<td><span style='color:red' class='dropt'>" + state + "<span>Since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(state_time)) + "</span></span></td>\n")
         
-        print "<td></td>" * 12
+        print "<td></td>" * 15
         
         continue
         
@@ -344,6 +347,45 @@ for node in nodes:
         
     else:
         sys.stdout.write("<td><span style='color:red'>" + datapkg + "</span></td>\n")
+        
+        
+        
+    # /lchong/home
+    lchong_home = do_sql_query("lchong_home", node)
+    if lchong_home == None:
+        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
+        
+    elif lchong_home == "ok":
+        sys.stdout.write("<td>ok</td>\n")
+        
+    else:
+        sys.stdout.write("<td><span style='color:red'>" + lchong_home + "</span></td>\n")
+        
+        
+        
+    # /lchong/archive
+    lchong_archive = do_sql_query("lchong_archive", node)
+    if lchong_archive == None:
+        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
+        
+    elif lchong_archive == "ok":
+        sys.stdout.write("<td>ok</td>\n")
+        
+    else:
+        sys.stdout.write("<td><span style='color:red'>" + lchong_archive + "</span></td>\n")
+        
+        
+        
+    # /lchong/work
+    lchong_work = do_sql_query("lchong_work", node)
+    if lchong_work == None:
+        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
+        
+    elif lchong_work == "ok":
+        sys.stdout.write("<td>ok</td>\n")
+        
+    else:
+        sys.stdout.write("<td><span style='color:red'>" + lchong_work + "</span></td>\n")
         
         
         
