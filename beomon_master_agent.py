@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2
-# Last change: Added check for stale last check in value
+# Version: 1.2.1
+# Last change: Added a check for a missing last_check time
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -478,12 +478,16 @@ for line in bpstat_out.split(os.linesep):
     if state == "up":
         last_check = do_sql_query("last_check", node)
         
-        checkin_seconds_diff = int(time.time()) - int(last_check)
+        if last_check is None:
+            sys.stderr.write("Node " + str(node) + " last check in time is NULL\n")
         
-        if checkin_seconds_diff >= 3600: # 1 hour
-            sys.stderr.write("Node " + str(node) + " last check in time is stale (last checked in " + str(checkin_seconds_diff) + " seconds ago)\n")
+        else:
+            checkin_seconds_diff = int(time.time()) - int(last_check)
+        
+            if checkin_seconds_diff >= 3600: # 1 hour
+                sys.stderr.write("Node " + str(node) + " last check in time is stale (last checked in " + str(checkin_seconds_diff) + " seconds ago)\n")
             
-            syslog.syslog(syslog.LOG_WARNING, "Node " + str(node) + " last check in time is stale (last checked in " + str(checkin_seconds_diff) + " seconds ago)")
+                syslog.syslog(syslog.LOG_WARNING, "Node " + str(node) + " last check in time is stale (last checked in " + str(checkin_seconds_diff) + " seconds ago)")
     
     
     
