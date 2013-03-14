@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1.2
-# Last change: Changed the filesystem section to a dictionary loop
+# Version: 1.2
+# Last change: Floating table header
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -71,14 +71,14 @@ sys.stdout.write("""Content-type: text/html
 <html>
 <head>
 <title>Frank Compute Node Status</title>
-<link href="http://clusman0-dev.francis.sam.pitt.edu/nodes-css/style.css" rel="stylesheet" type="text/css">
+<link href="http://clusman0-dev.francis.sam.pitt.edu/nodes-css/style.css" media="all" rel="stylesheet" type="text/css">
 </head>
 <body>
     <center>
         <h2>Beomon</h2>
-        <p>Node state (up, down, boot ...) is checked every 5 minutes.
+        <p>Node state (up, down, boot ...) is checked every 5 minutes.</p>
     </center>
-<table id="nodes" summary="Node status" class="fancy">
+<table id="nodes" summary="Node status" class="tablesorter">
     <thead>
         <tr>
             <th scope="col">Node</th>
@@ -286,6 +286,17 @@ db.close()
 # Footer
 sys.stdout.write("""    </tbody>
 </table>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+<script src="http://clusman0-dev.francis.sam.pitt.edu/nodes-css/jquery.stickytableheaders.js" type="text/javascript"></script> 
+
+<script type="text/javascript">
+
+                $(document).ready(function () {
+                        $("table").stickyTableHeaders();
+                });
+
+</script>
 </body>
 </html>
 """)

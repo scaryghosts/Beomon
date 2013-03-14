@@ -28,7 +28,7 @@ or orphaned when no master is in control.
 License
 -------
 
-This software is released under version three of the GNU General Public License (GPL) of the
+Except where otherwise noted, this software is released under version three of the GNU General Public License (GPL) of the
 Free Software Foundation (FSF), the text of which is available at http://www.fsf.org/licensing/licenses/gpl-3.0.html.
 Use or modification of this software implies your acceptance of this license and its terms.
 This is a free software, you are free to change and redistribute it with the terms of the GNU GPL.
@@ -98,7 +98,11 @@ node you want to run it on.
 
 beomon_display.py is a CGI script to be ran by a Web server.  This will display a table of the
 current status of each node.  Hover over the node number to see the node's details (CPU type, RAM 
-amount, etc.).
+amount, etc.).  This does not support Internet Explorer.  It uses style.css and jquery.stickytableheaders.js.  
+The style.css file is derived from unlicensed work by Adam Cerini of the University of Pittsburgh.  
+The file jquery.stickytableheaders.js is from Jonas Mosbech (https://github.com/jmosbech/StickyTableHeaders).  
+Note that jquery.stickytableheaders.js is released under and MIT license.  See the file for more 
+information.
 
 
 beomon_statsgen.py will pull the node details (CPU type, RAM amount, etc.) out of the DB, create 
