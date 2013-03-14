@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.0.2
-# Last change: Changed the filesystem section to a dictionary loop
+# Version: 1.1
+# Last change: Added timeout for subprocesses, fixed string concatination bugs
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -15,7 +15,7 @@
 
 import sys
 sys.path.append("/opt/sam/beomon/modules/")
-import os, re, MySQLdb, subprocess, time, syslog
+import os, re, MySQLdb, subprocess, time, syslog, signal
 from optparse import OptionParser
 
 
@@ -71,7 +71,18 @@ def do_sql_query(cursor, column, node):
     return results[0]
             
 
-            
+
+# Prepare for subprocess timeouts
+class Alarm(Exception):
+    pass
+
+def alarm_handler(signum, frame):
+    raise Alarm
+
+signal.signal(signal.SIGALRM, alarm_handler)
+
+
+
 # Prepare syslog
 syslog.openlog(os.path.basename(sys.argv[0]), syslog.LOG_NOWAIT, syslog.LOG_DAEMON)
 
@@ -165,34 +176,44 @@ def check_health(db):
         cursor.execute("INSERT INTO beomon (node_id) VALUES (" + node + ")")
             
     # Moab
-    try: 
+    signal.alarm(30)
+    try:
         with open(os.devnull, "w") as devnull:
             subprocess.check_call(["/bin/true"], stdin=None, stdout=devnull, stderr=devnull, shell=False)
+            
+        signal.alarm(0)
             
         sys.stdout.write("Moab: ok\n")
         
         cursor.execute("UPDATE beomon SET moab='ok' WHERE node_id=" + node)
+    
+    except Alarm:
+        sys.stdout.write("Moab: Timeout\n")
         
+        cursor.execute("UPDATE beomon SET moab=NULL WHERE node_id=" + node)
+    
     except subprocess.CalledProcessError:
         sys.stdout.write("Moab: down\n")
         
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has Moab in state 'down'")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Moab in state 'down'")
         
         cursor.execute("UPDATE beomon SET moab='down' WHERE node_id=" + node)
             
-    except OSError:
-        sys.stdout.write("Moab: sysfail\n")
+    except Exception as err:
+        sys.stderr.write("Moab: sysfail (" + str(err) + ")\n")
         
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has Moab in state 'sysfail'")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Moab in state 'sysfail'")
         
         cursor.execute("UPDATE beomon SET moab='sysfail' WHERE node_id=" + node)
 
         
         
     # Infiniband
+    signal.alarm(30)
+    
     # Which nodes to skip
     ib_skip_ranges = [(4,11), (40,52), (59,66), (242,242), (283,284)]
-
+    
     if any(lower <= int(node) <= upper for (lower, upper) in ib_skip_ranges):
         sys.stdout.write("Infiniband: n/a\n") 
         
@@ -204,6 +225,8 @@ def check_health(db):
                 ib_info = subprocess.Popen(["/usr/bin/ibv_devinfo"], stdin=None, stdout=subprocess.PIPE, stderr=devnull)
                 out = ib_info.communicate()[0]
                 
+                signal.alarm(0)
+                
                 # Get the last state
                 last_state = do_sql_query(cursor, "infiniband", node)
                 
@@ -212,7 +235,7 @@ def check_health(db):
                 if match is None:
                     sys.stdout.write("Infiniband: down\n")
                     
-                    syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has Infiniband in state down")
+                    syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Infiniband in state down")
             
                     cursor.execute("UPDATE beomon SET infiniband='down' WHERE node_id=" + node)
             
@@ -220,11 +243,16 @@ def check_health(db):
                     sys.stdout.write("Infiniband: ok\n")
             
                     cursor.execute("UPDATE beomon SET infiniband='ok' WHERE node_id=" + node)
+        
+        except Alarm:
+            sys.stdout.write("Infiniband: Timeout\n")
             
-        except subprocess.CalledProcessError and OSError:
-            sys.stdout.write("Infiniband: sysfail\n")
+            cursor.execute("UPDATE beomon SET infiniband=NULL WHERE node_id=" + node)
             
-            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has Infiniband in state sysfail")
+        except Exception as err:
+            sys.stderr.write("Infiniband: sysfail (" + str(err) + ")")
+            
+            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Infiniband in state sysfail")
             
             # Get the last state
             last_state = do_sql_query(cursor, "infiniband", node)
@@ -234,6 +262,8 @@ def check_health(db):
 
         
     ## Tempurature
+    #signal.alarm(30)
+    
     #try:
         #sensor_name = ""
         #temp = False
@@ -261,6 +291,8 @@ def check_health(db):
             #info = subprocess.Popen(["/usr/bin/ipmitool sensor get '" + sensor_name + "'"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=True)
             #out = info.communicate()[0]
             
+            #signal.alarm(0)
+            
             #for line in out.split(os.linesep):
                 #line = line.rstrip()
                 
@@ -284,9 +316,13 @@ def check_health(db):
         
                 #cursor.execute("UPDATE beomon SET tempurature='unknown' WHERE node_id=" + node)
 
+    #except Alarm
+        #sys.stdout.write("Tempurature: Timeout"))
         
-    #except subprocess.CalledProcessError and OSError:
-        #sys.stdout.write("Tempurature: sysfail\n")
+        #cursor.execute("UPDATE beomon SET tempurature=NULL WHERE node_id=" + node)
+        
+    #except Exception as err:
+        #sys.stderr.write("Tempurature: sysfail (" + str(err) + "))
         
         #cursor.execute("UPDATE beomon SET tempurature='sysfail' WHERE node_id=" + node)
         
@@ -309,7 +345,7 @@ def check_health(db):
         
     else:
         sys.stdout.write("/scratch: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has /scratch in state failed")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has /scratch in state failed")
         
         cursor.execute("UPDATE beomon SET scratch='failed' WHERE node_id=" + node)    
 
@@ -338,7 +374,7 @@ def check_health(db):
 
         else:
             sys.stdout.write(mount_point + ": failed\n")
-            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " has " + mount_point + " in state failed")
+            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has " + mount_point + " in state failed")
             
             cursor.execute("UPDATE beomon SET " + filesystems[mount_point] + "='failed' WHERE node_id=" + node)
         
@@ -432,31 +468,42 @@ def check_health(db):
         
         
     # GPU
+    signal.alarm(30)
+    
     gpu = False
-    with open(os.devnull, "w") as devnull:
-        info = subprocess.Popen(["/sbin/lsmod"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
-        out = info.communicate()[0]
+    try:
+        with open(os.devnull, "w") as devnull:
+            info = subprocess.Popen(["/sbin/lsmod"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
+            out = info.communicate()[0]
+            
+            signal.alarm(0)
+            
+            for line in out.split(os.linesep):
+                line = line.rstrip()
+                
+                match = re.match("^nvidia", line)
+                
+                if match:
+                    gpu = True
+                    
+                    sys.stdout.write("GPU?: 1\n")
+                    cursor.execute("UPDATE beomon SET gpu=1 WHERE node_id=" + node)
+                    
+                    break
+                
+                else:
+                    continue
+                
+            if not gpu == True:
+                sys.stdout.write("GPU?: 0\n")
+                
+                cursor.execute("UPDATE beomon SET gpu=0 WHERE node_id=" + node)
+    
+    except Alarm:
+        sys.stdout.write("Failed to check for GPU, process timed out.\n")
         
-        for line in out.split(os.linesep):
-            line = line.rstrip()
-            
-            match = re.match("^nvidia", line)
-            
-            if match:
-                gpu = True
-                
-                sys.stdout.write("GPU?: 1\n")
-                cursor.execute("UPDATE beomon SET gpu=1 WHERE node_id=" + node)
-                
-                break
-            
-            else:
-                continue
-            
-        if not gpu == True:
-            sys.stdout.write("GPU?: 0\n")
-            
-            cursor.execute("UPDATE beomon SET gpu=0 WHERE node_id=" + node)
+    except Exception as err:
+        sys.stderr.write("Failed to check for GPU, process failed: " + str(err))
             
         
             
@@ -470,22 +517,31 @@ def check_health(db):
             
 
     # Serial number
-    with open(os.devnull, "w") as devnull:
-        info = subprocess.Popen(["/usr/sbin/dmidecode", "-s", "system-serial-number"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
-        out = info.communicate()[0]
-        
-        out = out.rstrip()
-        
-        if out:
-            serial = out
+    signal.alarm(30)
+    
+    try:
+        with open(os.devnull, "w") as devnull:
+            info = subprocess.Popen(["/usr/sbin/dmidecode", "-s", "system-serial-number"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
+            out = info.communicate()[0]
             
-        else:
-            serial = "unknown"
+            out = out.rstrip()
             
-        sys.stdout.write("Serial: " + serial + "\n")
-        
-        cursor.execute("UPDATE beomon SET serial='" + serial + "' WHERE node_id=" + node)
+            if out:
+                serial = out
+                
+            else:
+                serial = "unknown"
+                
+            sys.stdout.write("Serial: " + serial + "\n")
+            
+            cursor.execute("UPDATE beomon SET serial='" + serial + "' WHERE node_id=" + node)
 
+    except Alarm:
+        sys.stdout.write("Failed to get serial number, process timed out.\n")
+        
+    except Exception as err:
+        sys.stderr.write("Failed to get serial number, process failed: " + str(err))
+        
         
         
 ##    
