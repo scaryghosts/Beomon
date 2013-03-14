@@ -1,8 +1,9 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1
-# Last change: Added timeout for subprocesses, fixed string concatination bugs
+# Version: 1.2.1
+# Last change: Switched daemon mode to check IB status every 5 minutes and split each section into
+# its own subroutine
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -167,16 +168,22 @@ def run_to_completion(db):
     #    
     # Health checks    
     #
-            
-def check_health(db):
+
+# Add a row for the node if one does not exist.
+def add_row(db):
     cursor = db.cursor()
     
-    # Add a row for the node if one does not exist.
     if cursor.execute("SELECT node_id FROM beomon WHERE node_id=" + node) == 0:
         cursor.execute("INSERT INTO beomon (node_id) VALUES (" + node + ")")
             
-    # Moab
+        
+        
+# Moab
+def check_moab(db):
+    cursor = db.cursor()
+    
     signal.alarm(30)
+    
     try:
         with open(os.devnull, "w") as devnull:
             subprocess.check_call(["/bin/true"], stdin=None, stdout=devnull, stderr=devnull, shell=False)
@@ -208,7 +215,10 @@ def check_health(db):
 
         
         
-    # Infiniband
+# Infiniband
+def infiniband_check(db):
+    cursor = db.cursor()
+    
     signal.alarm(30)
     
     # Which nodes to skip
@@ -226,9 +236,6 @@ def check_health(db):
                 out = ib_info.communicate()[0]
                 
                 signal.alarm(0)
-                
-                # Get the last state
-                last_state = do_sql_query(cursor, "infiniband", node)
                 
                 match = re.match("state:\s+PORT_ACTIVE", out)
 
@@ -254,83 +261,85 @@ def check_health(db):
             
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Infiniband in state sysfail")
             
-            # Get the last state
-            last_state = do_sql_query(cursor, "infiniband", node)
-            
             cursor.execute("UPDATE beomon SET infiniband='sysfail' WHERE node_id=" + node)
             
 
         
-    ## Tempurature
-    #signal.alarm(30)
+# Tempurature
+def check_tempurature(db):
+    cursor = db.cursor()
+
+    signal.alarm(30)
     
-    #try:
-        #sensor_name = ""
-        #temp = False
+    try:
+        sensor_name = ""
+        temp = False
         
-        ## Figure out which sensor name to use
-        #if any(lower <= int(node) <= upper for (lower, upper) in [(0,16), (170,176)]):
-            #sensor_name = "System Temp"
+        # Figure out which sensor name to use
+        if any(lower <= int(node) <= upper for (lower, upper) in [(0,16), (170,176)]):
+            sensor_name = "System Temp"
         
-        #elif any(lower <= int(node) <= upper for (lower, upper) in [(177,241)]):
-            #sensor_name = "Ambient Temp"
+        elif any(lower <= int(node) <= upper for (lower, upper) in [(177,241)]):
+            sensor_name = "Ambient Temp"
             
-        #elif any(lower <= int(node) <= upper for (lower, upper) in [(242,242), (283,284)]):
-            #sensor_name = "CPU0 Temp"
+        elif any(lower <= int(node) <= upper for (lower, upper) in [(242,242), (283,284)]):
+            sensor_name = "CPU0 Temp"
             
-        #elif any(lower <= int(node) <= upper for (lower, upper) in [(243,324)]):
-            #sensor_name = "CPU0_Temp"
+        elif any(lower <= int(node) <= upper for (lower, upper) in [(243,324)]):
+            sensor_name = "CPU0_Temp"
             
-        #else:
-            #sys.stdout.write("Tempurature: n/a\n")
+        else:
+            sys.stdout.write("Tempurature: n/a\n")
             
-            #cursor.execute("UPDATE beomon SET tempurature='n/a' WHERE node_id=" + node)
-        ##sensor_name = "CPU 1 Temp"
+            cursor.execute("UPDATE beomon SET tempurature='n/a' WHERE node_id=" + node)
+        #sensor_name = "CPU 1 Temp"
 
-        #with open(os.devnull, "w") as devnull:
-            #info = subprocess.Popen(["/usr/bin/ipmitool sensor get '" + sensor_name + "'"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=True)
-            #out = info.communicate()[0]
+        with open(os.devnull, "w") as devnull:
+            info = subprocess.Popen(["/usr/bin/ipmitool sensor get '" + sensor_name + "'"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=True)
+            out = info.communicate()[0]
             
-            #signal.alarm(0)
+            signal.alarm(0)
             
-            #for line in out.split(os.linesep):
-                #line = line.rstrip()
+            for line in out.split(os.linesep):
+                line = line.rstrip()
                 
-                #sensor_match = re.match("^\s+Sensor Reading\s+:\s+(\d+)", line)
+                sensor_match = re.match("^\s+Sensor Reading\s+:\s+(\d+)", line)
                 
-                #if sensor_match:
-                    #temp = sensor_match.group(1)
+                if sensor_match:
+                    temp = sensor_match.group(1)
                     
-                    #sys.stdout.write("Tempurature: " + temp + "C (" + sensor_name + ")\n")
+                    sys.stdout.write("Tempurature: " + temp + "C (" + sensor_name + ")\n")
                     
-                    #cursor.execute("UPDATE beomon SET tempurature='" + temp + "C (" + sensor_name + ")' WHERE node_id=" + node)
+                    cursor.execute("UPDATE beomon SET tempurature='" + temp + "C (" + sensor_name + ")' WHERE node_id=" + node)
                     
-                    #break
+                    break
                 
-                #else:
-                    #continue
+                else:
+                    continue
                 
-            ## If we couldn't find a temp...
-            #if not temp:
-                #sys.stdout.write("Tempurature: unknown\n")
+            # If we couldn't find a temp...
+            if not temp:
+                sys.stdout.write("Tempurature: unknown\n")
         
-                #cursor.execute("UPDATE beomon SET tempurature='unknown' WHERE node_id=" + node)
+                cursor.execute("UPDATE beomon SET tempurature='unknown' WHERE node_id=" + node)
 
-    #except Alarm
-        #sys.stdout.write("Tempurature: Timeout"))
+    except Alarm:
+        sys.stdout.write("Tempurature: Timeout")
         
-        #cursor.execute("UPDATE beomon SET tempurature=NULL WHERE node_id=" + node)
+        cursor.execute("UPDATE beomon SET tempurature=NULL WHERE node_id=" + node)
         
-    #except Exception as err:
-        #sys.stderr.write("Tempurature: sysfail (" + str(err) + "))
+    except Exception as err:
+        sys.stderr.write("Tempurature: sysfail (" + str(err) + ")")
         
-        #cursor.execute("UPDATE beomon SET tempurature='sysfail' WHERE node_id=" + node)
+        cursor.execute("UPDATE beomon SET tempurature='sysfail' WHERE node_id=" + node)
         
 
         
-    # /scratch
+# /scratch
+def check_scratch(db):
+    cursor = db.cursor()
+
     scratch_size = int()
-    last_state = do_sql_query(cursor, "scratch", node)
 
     if os.path.ismount("/scratch") is True:
         sys.stdout.write("/scratch: ok\n")
@@ -351,7 +360,10 @@ def check_health(db):
 
 
 
-    # Filesystems to check
+# Filesystems check
+def check_filesystems(db):
+    cursor = db.cursor()
+    
     filesystems = {
         "/data/pkg" : "datapkg",
         "/data/sam" : "datasam",
@@ -384,7 +396,10 @@ def check_health(db):
     # General node info
     #    
         
-    # CPU model
+# CPU model
+def get_cpu_model(db):
+    cursor = db.cursor()
+    
     proc_info_file = open("/proc/cpuinfo", "r")
 
     for line in proc_info_file:
@@ -405,7 +420,10 @@ def check_health(db):
 
 
 
-    # Number of CPU cores
+# Number of CPU cores
+def get_cpu_count(db):
+    cursor = db.cursor()    
+    
     num_physical_cpus = int()
     cpu_cores = int()
 
@@ -439,7 +457,10 @@ def check_health(db):
         
         
         
-    # RAM amount
+# RAM amount
+def get_ram_amount(db):
+    cursor = db.cursor()
+    
     ram_amount = int()
 
     mem_info_file = open("/proc/meminfo", "r")
@@ -462,12 +483,20 @@ def check_health(db):
 
         
         
-    # /scratch size we found earlier
+# /scratch size we found earlier
+def show_scratch_size(db):
+    cursor = db.cursor()
+    
+    scratch_size = do_sql_query(cursor, "scratch_size", node)
+    
     sys.stdout.write("/scratch Size: " + str(scratch_size) + " GB\n")
         
         
         
-    # GPU
+# GPU
+def get_gpu_info(db):
+    cursor = db.cursor()
+    
     signal.alarm(30)
     
     gpu = False
@@ -506,17 +535,11 @@ def check_health(db):
         sys.stderr.write("Failed to check for GPU, process failed: " + str(err))
             
         
-            
-    # IB?
-    if do_sql_query(cursor, "infiniband", node) == "n/a":
-        sys.stdout.write("IB?: 0\n")
-        
-    else:
-        sys.stdout.write("IB?: 1\n")
 
-            
-
-    # Serial number
+# Serial number
+def get_seral_number(db):
+    cursor = db.cursor()
+    
     signal.alarm(30)
     
     try:
@@ -553,8 +576,22 @@ def check_health(db):
 if options.daemonize == False:
     db = connect_mysql()
     
-    # Call check_health(db) to do the real work
-    check_health(db)
+    add_row(db)
+    check_moab(db)
+    infiniband_check(db)
+    #check_tempurature(db)
+    check_scratch(db)
+    check_filesystems(db)
+    get_cpu_model(db)
+    get_cpu_count(db)
+    get_ram_amount(db)
+    show_scratch_size(db)
+    get_gpu_info(db)
+    get_seral_number(db)
+    
+    # Report that we've now checked ourself
+    cursor = db.cursor()
+    cursor.execute("UPDATE beomon SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
     
 else:
     # Set STDOUT and STDIN to /dev/null
@@ -579,12 +616,24 @@ else:
     
     db = connect_mysql()
 
-    # Only run check_health() once then next time just report that we're still alive
-    check_health(db)
+    add_row(db)
+    check_moab(db)
+    #check_tempurature(db)
+    check_scratch(db)
+    check_filesystems(db)
+    get_cpu_model(db)
+    get_cpu_count(db)
+    get_ram_amount(db)
+    show_scratch_size(db)
+    get_gpu_info(db)
+    get_seral_number(db)
     
     while True:
-        # Report that we've now checked ourself
         cursor = db.cursor()
+        
+        infiniband_check(db)
+        
+        # Report that we've now checked ourself
         cursor.execute("UPDATE beomon SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
         
         # Sleep for 5 minutes, if we wake with time left go back to sleep.
