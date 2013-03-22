@@ -67,9 +67,12 @@ capable of running a python script should work.
 
 * `yum install httpd`
 * Add "LoadModule cgi_module modules/mod_cgi.so" to the configuration
-* Add "ScriptAlias /nodes /path/to/cgiroot/beomon_display.py" to the configuration
-* Ensure the user httpd runs as can execute the program
-* Go to http://your.web.server/nodes
+* Add "ScriptAlias /beomon /path/to/webroot/bemon-stuff/beomon_display.py" to the configuration
+* Copy style.css, jquery.stickytableheaders.js and jquery.min.js to /path/to/webroot/beomon-stuff/
+* Note: Where these files are put cannot be called "beomon" since that will trigger the ScriptAlias 
+* directive when the script pulls in the other CSS and JavaScript files.
+* Ensure the user httpd runs as can execute the program and access the other files
+* Go to http://your.web.server/beomon
 
 ### The programs
 

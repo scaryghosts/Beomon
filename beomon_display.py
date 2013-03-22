@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2
-# Last change: Floating table header
+# Version: 1.2.1
+# Last change: Use local path for JS and CSS files pulled in
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -71,7 +71,7 @@ sys.stdout.write("""Content-type: text/html
 <html>
 <head>
 <title>Frank Compute Node Status</title>
-<link href="http://clusman0-dev.francis.sam.pitt.edu/nodes-css/style.css" media="all" rel="stylesheet" type="text/css">
+<link href="beomon-stuff/style.css" media="all" rel="stylesheet" type="text/css">
 </head>
 <body>
     <center>
@@ -286,9 +286,9 @@ db.close()
 # Footer
 sys.stdout.write("""    </tbody>
 </table>
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+<script src="beomon-stuff/jquery.min.js" type="text/javascript"></script>
 
-<script src="http://clusman0-dev.francis.sam.pitt.edu/nodes-css/jquery.stickytableheaders.js" type="text/javascript"></script> 
+<script src="beomon-stuff/jquery.stickytableheaders.js" type="text/javascript"></script> 
 
 <script type="text/javascript">
 
