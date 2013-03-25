@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.1
-# Last change: Added a check for a missing last_check time
+# Version: 1.2.2
+# Last change: Syslog is no longer closed early
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -495,12 +495,6 @@ for line in bpstat_out.split(os.linesep):
     
     
 
-# Close the DB, we're done with it
-syslog.closelog()
-db.close()
-
-
-
 # Check if we have too many nodes not up
 
 if num_state["down"] >= 10:
@@ -542,3 +536,9 @@ elif num_state["pbs_offline"] > 0:
 sys.stdout.write(str(num_state["partnered"]) + " nodes in state 'partnered'\n")
     
 sys.stdout.write(str(num_state["up"]) + " nodes in state 'up'\n")
+
+
+
+# Close the DB, we're done with it
+syslog.closelog()
+db.close()
