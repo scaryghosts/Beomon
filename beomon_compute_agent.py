@@ -1,9 +1,9 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.1
-# Last change: Switched daemon mode to check IB status every 5 minutes and split each section into
-# its own subroutine
+# Version: 1.2.2
+# Last change: Fixed regexes to use re.search instead of re.match in certain case, 
+# added a missing signal.alarm(0) to the IB check when IB == N/A
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -92,7 +92,7 @@ syslog.openlog(os.path.basename(sys.argv[0]), syslog.LOG_NOWAIT, syslog.LOG_DAEM
 # Are we on a compute node?
 hostname = os.uname()[1]
 
-match = re.match("n\d+", hostname)
+match = re.match("^n\d+", hostname)
 
 if match is None:
     sys.stderr.write("Not a compute node, exiting.\n")
