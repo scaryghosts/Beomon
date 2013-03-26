@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.1
-# Last change: Use local path for JS and CSS files pulled in
+# Version: 1.2.2
+# Last change: Added whitespace after the table so the pop up info box doesn't go below the page, 
+# added a warning about using IE
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -74,6 +75,16 @@ sys.stdout.write("""Content-type: text/html
 <link href="beomon-stuff/style.css" media="all" rel="stylesheet" type="text/css">
 </head>
 <body>
+
+<script src="beomon-stuff/jquery.min.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+  // IE feature detection
+  if(!jQuery.support.htmlSerialize){
+    document.write("<center><p><span style='color:red;background-color:black;font-size:150%'>WARNING: You appear to be unsing an usupported browser.  Please use Firefox, Chromium or Chrome instead.</span></p></center>");
+  }
+</script>
+
     <center>
         <h2>Beomon</h2>
         <p>Node state (up, down, boot ...) is checked every 5 minutes.</p>
@@ -286,8 +297,6 @@ db.close()
 # Footer
 sys.stdout.write("""    </tbody>
 </table>
-<script src="beomon-stuff/jquery.min.js" type="text/javascript"></script>
-
 <script src="beomon-stuff/jquery.stickytableheaders.js" type="text/javascript"></script> 
 
 <script type="text/javascript">
