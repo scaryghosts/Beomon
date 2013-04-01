@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.2
-# Last change: Syslog is no longer closed early
+# Version: 1.2.3
+# Last change: Fixed incorrect output to STDERR on the PBS check
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -441,19 +441,19 @@ for line in bpstat_out.split(os.linesep):
                 pbs_state = line.split()[2]
                 
                 if pbs_state == "offline":
-                    sys.stderr.write("PBS: Offline\n")
+                    sys.stdout.write("PBS: Offline\n")
                     
                     num_state["pbs_offline"] += 1
                     
                     cursor.execute("UPDATE beomon SET pbs_state='offline' WHERE node_id=" + node)
                     
                 elif pbs_state == "down":
-                    sys.stderr.write("PBS: Down\n")
+                    sys.stdout.write("PBS: Down\n")
                     
                     cursor.execute("UPDATE beomon SET pbs_state='down' WHERE node_id=" + node)
                     
                 else:
-                    sys.stderr.write("PBS: OK\n")
+                    sys.stdout.write("PBS: OK\n")
                     
                     cursor.execute("UPDATE beomon SET pbs_state='ok' WHERE node_id=" + node)
                     
