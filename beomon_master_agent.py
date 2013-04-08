@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.3
-# Last change: Fixed incorrect output to STDERR on the PBS check
+# Version: 1.2.4
+# Last change: Added a syslog for the first time a ndoe is seen down
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
