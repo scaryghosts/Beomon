@@ -344,12 +344,14 @@ for line in bpstat_out.split(os.linesep):
                 ## TODO: Add IPMI's 'chassis power cycle'
                 
                 ## If the node has been down for more than 30 minutes, throw an alert
-                #if (int(time.time()) - int(state_time)) >= 1800:
-                    #syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " is not up, state: down")
-                
+                if (int(time.time()) - int(state_time)) >= 1800:
+                   syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " is not up, state: down")
+                   
                 
             else:
                 sys.stdout.write("State: down - new\n")
+                
+                syslog.syslog(syslog.LOG_WARN, "Node " + node + " is not up, state: down")
                 
                 cursor.execute("UPDATE beomon SET state='down', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
                 
