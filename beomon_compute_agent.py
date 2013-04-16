@@ -1,9 +1,9 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.2
-# Last change: Fixed regexes to use re.search instead of re.match in certain case, 
-# added a missing signal.alarm(0) to the IB check when IB == N/A
+# Version: 1.3
+# Last change: Added PID and lock files as well as a signal handler to daemon mode, 
+# removed Chong storage checks
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -51,13 +51,13 @@ def connect_mysql():
     # Open a DB connection
     try:
         db = MySQLdb.connect(
-            host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
+            host="headnode1.frank.sam.pitt.edu", user="beomon",
             passwd=dbpass, db="beomon"
         )
                                                 
         return db
         
-    except MySQLError as err:
+    except Exception as err:
         sys.stderr.write("Failed to connect to the Beomon database: " + str(err) + "\n")
         sys.exit(1)
         
@@ -225,6 +225,8 @@ def infiniband_check(db):
     ib_skip_ranges = [(4,11), (40,52), (59,66), (242,242), (283,284)]
     
     if any(lower <= int(node) <= upper for (lower, upper) in ib_skip_ranges):
+        signal.alarm(0)
+        
         sys.stdout.write("Infiniband: n/a\n") 
         
         cursor.execute("UPDATE beomon SET infiniband='n/a' WHERE node_id=" + node)
@@ -237,19 +239,19 @@ def infiniband_check(db):
                 
                 signal.alarm(0)
                 
-                match = re.match("state:\s+PORT_ACTIVE", out)
+                match = re.search("state:\s+PORT_ACTIVE", out)
 
-                if match is None:
+                if match:
+                    sys.stdout.write("Infiniband: ok\n")
+            
+                    cursor.execute("UPDATE beomon SET infiniband='ok' WHERE node_id=" + node)
+            
+                else:
                     sys.stdout.write("Infiniband: down\n")
                     
                     syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Infiniband in state down")
             
                     cursor.execute("UPDATE beomon SET infiniband='down' WHERE node_id=" + node)
-            
-                else:
-                    sys.stdout.write("Infiniband: ok\n")
-            
-                    cursor.execute("UPDATE beomon SET infiniband='ok' WHERE node_id=" + node)
         
         except Alarm:
             sys.stdout.write("Infiniband: Timeout\n")
@@ -371,9 +373,6 @@ def check_filesystems(db):
         "/home" : "home0",
         "/home1" : "home1",
         "/home2" : "home2",
-        "/lchong/archive" : "lchong_archive",
-        "/lchong/home" : "lchong_home",
-        "/lchong/work" : "lchong_work",
         "/pan" : "panasas",
     }
 
@@ -510,7 +509,7 @@ def get_gpu_info(db):
             for line in out.split(os.linesep):
                 line = line.rstrip()
                 
-                match = re.match("^nvidia", line)
+                match = re.search("^nvidia", line)
                 
                 if match:
                     gpu = True
@@ -589,11 +588,28 @@ if options.daemonize == False:
     get_gpu_info(db)
     get_seral_number(db)
     
+    
     # Report that we've now checked ourself
     cursor = db.cursor()
     cursor.execute("UPDATE beomon SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
     
+    
+    # Close the DB, we're done
+    syslog.closelog()
+    db.close()
+    
 else:
+    # Check if our PID or lock files already exist
+    if os.path.exists("/var/lock/subsys/beomon_compute_agent") and not os.path.exists("/var/run/beomon_compute_agent.pid"):
+        sys.stderr.write("PID file not found but subsys locked\n")
+        sys.exit(1)
+        
+    elif os.path.exists("/var/lock/subsys/beomon_compute_agent") or os.path.exists("/var/run/beomon_compute_agent.pid"):
+        sys.stderr.write("Existing PID or lock file found (/var/lock/subsys/beomon_compute_agent or " + 
+        "/var/run/beomon_compute_agent.pid), already running?  Exiting.\n")
+        sys.exit(1)
+        
+    
     # Set STDOUT and STDIN to /dev/null
     dev_null = open(os.devnull, "w")
     
@@ -603,6 +619,7 @@ else:
     # Set STDERR to a log file
     log_file = open("/opt/sam/beomon/log/" + node + ".log", "a")
     os.dup2(log_file.fileno(), 2) # STDERR
+    
     
     # Fork time!
     os.chdir("/")
@@ -614,6 +631,47 @@ else:
     
     os.setsid()
     
+    
+    # Create our lock and PID files
+    lockfile_handle = open("/var/lock/subsys/beomon_compute_agent", "w")
+    lockfile_handle.close()
+    
+    pidfile_handle = open("/var/run/beomon_compute_agent.pid", "w")
+    pidfile_handle.write(str(os.getpid()) + "\n")
+    pidfile_handle.close()
+    
+    
+    # If we get a SIGINT or SIGTERM, clean up after ourselves and exit
+    def signal_handler(signal, frame):
+        sys.stderr.write("Caught signal, exiting.\n")
+        
+        try:
+            os.remove("/var/run/beomon_compute_agent.pid")
+        except:
+            pass
+        
+        try:
+            os.remove("/var/lock/subsys/beomon_compute_agent")
+        except:
+            pass
+        
+        try:
+            syslog.closelog()
+        except:
+            pass
+        
+        try:
+            log_file.close()
+        except:
+            pass
+        
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    
+    # Connect to the DB and get the initial info
     db = connect_mysql()
 
     add_row(db)
@@ -628,6 +686,8 @@ else:
     get_gpu_info(db)
     get_seral_number(db)
     
+    
+    # Keep checking in and make sure IB is up
     while True:
         cursor = db.cursor()
         
@@ -642,8 +702,3 @@ else:
         while int(time.time()) < wake_time:
             time.sleep(30)
     
-    
-    
-# Close the DB, we're done
-syslog.closelog()
-db.close()
