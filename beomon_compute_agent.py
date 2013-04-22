@@ -1,9 +1,10 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.3
-# Last change: Added PID and lock files as well as a signal handler to daemon mode, 
-# removed Chong storage checks
+# Version: 1.3.1
+# Last change: Replaced the CPU count algorithm with multiprocessing's cpu_count(), 
+# lightened the amount of module code imported, added DB connection close
+# to the SIGINT and SIGTERM handler
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -16,8 +17,10 @@
 
 import sys
 sys.path.append("/opt/sam/beomon/modules/")
-import os, re, MySQLdb, subprocess, time, syslog, signal
+import os, re, subprocess, time, syslog, signal
+from MySQLdb import connect
 from optparse import OptionParser
+from multiprocessing import cpu_count
 
 
 
@@ -50,7 +53,7 @@ def connect_mysql():
         
     # Open a DB connection
     try:
-        db = MySQLdb.connect(
+        db = connect(
             host="headnode1.frank.sam.pitt.edu", user="beomon",
             passwd=dbpass, db="beomon"
         )
@@ -102,9 +105,9 @@ node = re.sub("^n", "", hostname)
         
         
         
-    ##
-    ## Run to completion
-    ## 
+##
+## Run to completion
+## 
         
 def run_to_completion(db):
     cursor = db.cursor()
@@ -165,9 +168,9 @@ def run_to_completion(db):
 
         
     
-    #    
-    # Health checks    
-    #
+#    
+# Health checks    
+#
 
 # Add a row for the node if one does not exist.
 def add_row(db):
@@ -391,9 +394,9 @@ def check_filesystems(db):
         
         
         
-    #    
-    # General node info
-    #    
+#    
+# General node info
+#    
         
 # CPU model
 def get_cpu_model(db):
@@ -407,7 +410,7 @@ def get_cpu_model(db):
         model_match = re.match("^model name\s+:\s+(.*)$", line)
         
         if model_match:
-            cpu_type = model_match.group(1)
+            cpu_type = re.sub("\s+", " ", model_match.group(1))
             
             sys.stdout.write("CPU Type: " + cpu_type + "\n")
             
@@ -423,36 +426,11 @@ def get_cpu_model(db):
 def get_cpu_count(db):
     cursor = db.cursor()    
     
-    num_physical_cpus = int()
-    cpu_cores = int()
+    num_cpu_cores = cpu_count()
+    
+    sys.stdout.write("CPU Cores: " + str(num_cpu_cores) + "\n")
 
-    proc_info_file = open("/proc/cpuinfo", "r")
-
-    for line in proc_info_file:
-        line = line.rstrip()
-        
-        phys_match = re.match("^physical id\s+:\s+(\d+)$", line)
-        
-        if phys_match:
-            phys_id = phys_match.group(1)
-            
-            if int(phys_id) > num_physical_cpus:
-                num_physical_cpus = int(phys_id)
-                
-        core_match = re.match("^cpu cores\s+:\s+(\d+)$", line)
-        
-        if core_match:
-            cpu_cores = int(core_match.group(1))
-
-    num_physical_cpus += 1
-
-    cpu_cores = cpu_cores * num_physical_cpus
-
-    sys.stdout.write("CPU Cores: " + str(cpu_cores) + "\n")
-
-    cursor.execute("UPDATE beomon SET cpu_num=" + str(cpu_cores) + " WHERE node_id=" + node)
-
-    proc_info_file.close()
+    cursor.execute("UPDATE beomon SET cpu_num=" + str(num_cpu_cores) + " WHERE node_id=" + node)
         
         
         
@@ -662,6 +640,11 @@ else:
         
         try:
             log_file.close()
+        except:
+            pass
+        
+        try:
+            db.close()
         except:
             pass
         
