@@ -1,10 +1,8 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.3.1
-# Last change: Replaced the CPU count algorithm with multiprocessing's cpu_count(), 
-# lightened the amount of module code imported, added DB connection close
-# to the SIGINT and SIGTERM handler
+# Version: 1.3.2
+# Last change: Added a sleep before the IB check in daemon mode
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -674,6 +672,8 @@ else:
     while True:
         cursor = db.cursor()
         
+        # Give IB time to come up
+        time.sleep(30)
         infiniband_check(db)
         
         # Report that we've now checked ourself
