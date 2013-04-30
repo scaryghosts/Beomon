@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.3.2
-# Last change: Added a sleep before the IB check in daemon mode
+# Version: 1.4
+# Last change: Added a check for hyperthreading
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -392,6 +392,44 @@ def check_filesystems(db):
         
         
         
+# Hyperthreading check
+def check_hyperthreading():
+    # Skip Interlagos nodes
+    if any(lower <= int(node) <= upper for (lower, upper) in [(325,378)]):
+        sys.stdout.write("Hyperthreading: n/a\n")
+        
+    else:
+        proc_info_file = open("/proc/cpuinfo", "r")
+
+        num_cpu_cores = cpu_count()
+
+        for line in proc_info_file:
+            line = line.rstrip()
+            
+            if re.search("^siblings", line) is not None:
+                num_siblings = line.split()[2]
+                
+            elif re.search("^cpu cores", line) is not None:
+                num_cores = line.split()[3]
+                
+                break
+                
+        proc_info_file.close()
+                
+                
+        num_siblings = int(num_siblings)
+        num_cores = int(num_cores)
+
+
+        if num_cores == num_siblings:
+            sys.stdout.write("Hyperthreading: OK (disabled)\n")
+            
+        else:
+            sys.stdout.write("Hyperthreading: Error (enabled)\n")
+            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has hyperthreading enabled")
+        
+        
+        
 #    
 # General node info
 #    
@@ -557,6 +595,7 @@ if options.daemonize == False:
     #check_tempurature(db)
     check_scratch(db)
     check_filesystems(db)
+    check_hyperthreading()
     get_cpu_model(db)
     get_cpu_count(db)
     get_ram_amount(db)
@@ -660,6 +699,7 @@ else:
     #check_tempurature(db)
     check_scratch(db)
     check_filesystems(db)
+    check_hyperthreading()
     get_cpu_model(db)
     get_cpu_count(db)
     get_ram_amount(db)
