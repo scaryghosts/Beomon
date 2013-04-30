@@ -1,8 +1,9 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.4
-# Last change: Added a check for hyperthreading
+# Version: 1.4.1
+# Last change: Fixed a bug where the wait for IB to come up didn't only happen once, 
+# added a missing timeout reset
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -220,20 +221,18 @@ def check_moab(db):
 def infiniband_check(db):
     cursor = db.cursor()
     
-    signal.alarm(30)
-    
     # Which nodes to skip
     ib_skip_ranges = [(4,11), (40,52), (59,66), (242,242), (283,284)]
     
     if any(lower <= int(node) <= upper for (lower, upper) in ib_skip_ranges):
-        signal.alarm(0)
-        
         sys.stdout.write("Infiniband: n/a\n") 
         
         cursor.execute("UPDATE beomon SET infiniband='n/a' WHERE node_id=" + node)
         
     else:
-        try: 
+        signal.alarm(30)
+        
+        try:
             with open(os.devnull, "w") as devnull:
                 ib_info = subprocess.Popen(["/usr/bin/ibv_devinfo"], stdin=None, stdout=subprocess.PIPE, stderr=devnull)
                 out = ib_info.communicate()[0]
@@ -272,8 +271,6 @@ def infiniband_check(db):
 def check_tempurature(db):
     cursor = db.cursor()
 
-    signal.alarm(30)
-    
     try:
         sensor_name = ""
         temp = False
@@ -297,6 +294,8 @@ def check_tempurature(db):
             cursor.execute("UPDATE beomon SET tempurature='n/a' WHERE node_id=" + node)
         #sensor_name = "CPU 1 Temp"
 
+        signal.alarm(30)
+        
         with open(os.devnull, "w") as devnull:
             info = subprocess.Popen(["/usr/bin/ipmitool sensor get '" + sensor_name + "'"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=True)
             out = info.communicate()[0]
@@ -560,6 +559,8 @@ def get_seral_number(db):
             info = subprocess.Popen(["/usr/sbin/dmidecode", "-s", "system-serial-number"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
             out = info.communicate()[0]
             
+            signal.alarm(0)
+            
             out = out.rstrip()
             
             if out:
@@ -706,14 +707,14 @@ else:
     show_scratch_size(db)
     get_gpu_info(db)
     get_seral_number(db)
-    
+
+    # Give IB time to come up
+    time.sleep(30)
     
     # Keep checking in and make sure IB is up
     while True:
         cursor = db.cursor()
         
-        # Give IB time to come up
-        time.sleep(30)
         infiniband_check(db)
         
         # Report that we've now checked ourself
