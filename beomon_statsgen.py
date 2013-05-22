@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1
-# Last change: Initial version
+# Version: 1.1
+# Last change: Changed MySQL server and binary paths to a variables
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -17,6 +17,10 @@ import sys
 sys.path.append("/opt/sam/beomon/modules/")
 import os, MySQLdb
 from optparse import OptionParser
+
+
+
+mysql_host = "clusman0a.frank.sam.pitt.edu"
 
 
 
@@ -63,7 +67,7 @@ dbpasshandle.close()
 # Open a DB connection
 try:
     db = MySQLdb.connect(
-        host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
+        host=mysql_host, user="beomon",
         passwd=dbpass, db="beomon"
     )
                                              

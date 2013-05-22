@@ -1,9 +1,8 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.4.1
-# Last change: Fixed a bug where the wait for IB to come up didn't only happen once, 
-# added a missing timeout reset
+# Version: 1.4.2
+# Last change: Changed MySQL server and binary paths to a variables
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -11,6 +10,14 @@
 # Use or modification of this software implies your acceptance of this license and its terms.
 # This is a free software, you are free to change and redistribute it with the terms of the GNU GPL.
 # There is NO WARRANTY, not even for FITNESS FOR A PARTICULAR USE to the extent permitted by law.
+
+
+
+mysql_host = "clusman0a.frank.sam.pitt.edu"
+ibv_devinfo = "/usr/bin/ibv_devinfo"
+ipmitool = "/usr/bin/ipmitool"
+lsmod = "/sbin/lsmod"
+dmidecode = "/usr/sbin/dmidecode"
 
 
 
@@ -53,7 +60,7 @@ def connect_mysql():
     # Open a DB connection
     try:
         db = connect(
-            host="headnode1.frank.sam.pitt.edu", user="beomon",
+            host=mysql_host, user="beomon",
             passwd=dbpass, db="beomon"
         )
                                                 
@@ -234,7 +241,7 @@ def infiniband_check(db):
         
         try:
             with open(os.devnull, "w") as devnull:
-                ib_info = subprocess.Popen(["/usr/bin/ibv_devinfo"], stdin=None, stdout=subprocess.PIPE, stderr=devnull)
+                ib_info = subprocess.Popen([ibv_devinfo], stdin=None, stdout=subprocess.PIPE, stderr=devnull)
                 out = ib_info.communicate()[0]
                 
                 signal.alarm(0)
@@ -297,7 +304,7 @@ def check_tempurature(db):
         signal.alarm(30)
         
         with open(os.devnull, "w") as devnull:
-            info = subprocess.Popen(["/usr/bin/ipmitool sensor get '" + sensor_name + "'"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=True)
+            info = subprocess.Popen([ipmitool + " sensor get '" + sensor_name + "'"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=True)
             out = info.communicate()[0]
             
             signal.alarm(0)
@@ -514,7 +521,7 @@ def get_gpu_info(db):
     gpu = False
     try:
         with open(os.devnull, "w") as devnull:
-            info = subprocess.Popen(["/sbin/lsmod"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
+            info = subprocess.Popen([lsmod], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
             out = info.communicate()[0]
             
             signal.alarm(0)
@@ -556,7 +563,7 @@ def get_seral_number(db):
     
     try:
         with open(os.devnull, "w") as devnull:
-            info = subprocess.Popen(["/usr/sbin/dmidecode", "-s", "system-serial-number"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
+            info = subprocess.Popen([dmidecode, "-s", "system-serial-number"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
             out = info.communicate()[0]
             
             signal.alarm(0)

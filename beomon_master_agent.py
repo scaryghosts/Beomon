@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.4
-# Last change: Added a syslog for the first time a ndoe is seen down
+# Version: 1.2.5
+# Last change: Changed MySQL server and binary paths to a variables
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -17,6 +17,13 @@ import sys
 sys.path.append("/opt/sam/beomon/modules/")
 import os, re, MySQLdb, subprocess, time, syslog, paramiko
 from optparse import OptionParser
+
+
+
+mysql_host = "clusman0a.frank.sam.pitt.edu"
+clusman_host = "clusman0a.frank.sam.pitt.edu"
+pbsnodes = "/usr/bin/pbsnodes"
+bpstat = "/usr/bin/bpstat"
 
 
 
@@ -78,7 +85,7 @@ dbpasshandle.close()
 # Open a DB connection
 try:
     db = MySQLdb.connect(
-        host="clusman0-dev.francis.sam.pitt.edu", user="beomon",
+        host=mysql_host, user="beomon",
         passwd=dbpass, db="beomon"
     )
                                              
@@ -93,17 +100,35 @@ except MySQLError as err:
 # Determine our partner
 hostname = os.uname()[1]
     
-if hostname == "head0a-dev.francis.sam.pitt.edu":
-    partner = "head0b-dev.francis.sam.pitt.edu"
+if hostname == "head0a.frank.sam.pitt.edu":
+    partner = "head0b.frank.sam.pitt.edu"
 
-elif hostname == "head0b-dev.francis.sam.pitt.edu":
-    partner = "head0a-dev.francis.sam.pitt.edu"
+elif hostname == "head0b.frank.sam.pitt.edu":
+    partner = "head0a.frank.sam.pitt.edu"
+    
+elif hostname == "head1a.frank.sam.pitt.edu":
+    partner = "head1b.frank.sam.pitt.edu"
+    
+elif hostname == "head1b.frank.sam.pitt.edu":
+    partner = "head1a.frank.sam.pitt.edu"
+    
+elif hostname == "head2a.frank.sam.pitt.edu":
+    partner = "head2b.frank.sam.pitt.edu"
+    
+elif hostname == "head2b.frank.sam.pitt.edu":
+    partner = "head2a.frank.sam.pitt.edu"
+    
+elif hostname == "head3a.frank.sam.pitt.edu":
+    partner = "head3b.frank.sam.pitt.edu"
+    
+elif hostname == "head3b.frank.sam.pitt.edu":
+    partner = "head3a.frank.sam.pitt.edu"
     
     
     
 # Get the output of beostat
 try:
-    bpstat = subprocess.Popen(["/usr/bin/bpstat" ,"-l", nodes], stdout=subprocess.PIPE, shell=False)
+    bpstat = subprocess.Popen([bpstat, "-l", nodes], stdout=subprocess.PIPE, shell=False)
     
     status = bpstat.wait()
     
@@ -161,14 +186,14 @@ for line in bpstat_out.split(os.linesep):
                 ssh.load_system_host_keys()
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 
-                ssh.connect("clusman0-dev.francis.sam.pitt.edu")
+                ssh.connect(clusman_host)
                 channel = ssh.get_transport().open_session()
                 
                 stdin = channel.makefile("wb", 1024)
                 stdout = channel.makefile("rb", 1024)
                 stderr = channel.makefile_stderr("rb", 1024)
                 
-                channel.exec_command("/usr/bin/pbsnodes -c n" + node + "; exit $?")
+                channel.exec_command(pbsnodes + " -c n" + node + "; exit $?")
                 
                 # Check for errors
                 err = stderr.read()
@@ -190,7 +215,7 @@ for line in bpstat_out.split(os.linesep):
                 ssh.close()
                 
             except Exception, err:
-                sys.stderr.write("Failed to online node with `pbsnodes` on clusman0-dev.francis.sam.pitt.edu: " + str(err) + "\n")
+                sys.stderr.write("Failed to online node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n")
             
             cursor.execute("UPDATE beomon SET state='up', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
         
@@ -223,7 +248,7 @@ for line in bpstat_out.split(os.linesep):
             stdout = channel.makefile("rb", 1024)
             stderr = channel.makefile_stderr("rb", 1024)
             
-            channel.exec_command("/usr/bin/bpstat " + node + "; exit $?")
+            channel.exec_command(bpstat + node + "; exit $?")
             
             err = stderr.read()
             stderr.close()
@@ -298,14 +323,14 @@ for line in bpstat_out.split(os.linesep):
                     ssh.load_system_host_keys()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-                    ssh.connect("clusman0-dev.francis.sam.pitt.edu")
+                    ssh.connect(clusman_host)
                     channel = ssh.get_transport().open_session()
                     
                     stdin = channel.makefile("wb", 1024)
                     stdout = channel.makefile("rb", 1024)
                     stderr = channel.makefile_stderr("rb", 1024)
                     
-                    channel.exec_command("/usr/bin/pbsnodes -o n" + node + "; exit $?")
+                    channel.exec_command(pbsnodes + " -o n" + node + "; exit $?")
                     
                     # Check for errors
                     err = stderr.read()
@@ -327,7 +352,7 @@ for line in bpstat_out.split(os.linesep):
                     ssh.close()
                         
                 except Exception, err:
-                    sys.stderr.write("Failed to offline node with `pbsnodes` on clusman0-dev.francis.sam.pitt.edu: " + str(err) + "\n")
+                    sys.stderr.write("Failed to offline node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n")
                 
                 cursor.execute("UPDATE beomon SET state='orphan', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
         
@@ -409,14 +434,14 @@ for line in bpstat_out.split(os.linesep):
             ssh.load_system_host_keys()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-            ssh.connect("clusman0-dev.francis.sam.pitt.edu")
+            ssh.connect(clusman_host)
             channel = ssh.get_transport().open_session()
             
             stdin = channel.makefile("wb", 1024)
             stdout = channel.makefile("rb", 1024)
             stderr = channel.makefile_stderr("rb", 1024)
             
-            channel.exec_command("/usr/bin/pbsnodes -q n" + node + "; exit $?")
+            channel.exec_command(pbsnodes + " -q n" + node + "; exit $?")
             
             # Check for errors
             err = stderr.read()
@@ -466,9 +491,9 @@ for line in bpstat_out.split(os.linesep):
             ssh.close()
             
         except Exception, err:
-            sys.stderr.write("Failed to check PBS state node with `pbsnodes` on clusman0-dev.francis.sam.pitt.edu: " + str(err) + "\n")
+            sys.stderr.write("Failed to check PBS state node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n")
 
-            syslog.syslog(syslog.LOG_WARNING, "Failed to check PBS state node with `pbsnodes` on clusman0-dev.francis.sam.pitt.edu for node: " + node)
+            syslog.syslog(syslog.LOG_WARNING, "Failed to check PBS state node with `pbsnodes` on " + clusman_host + " for node: " + node)
             
             cursor.execute("UPDATE beomon SET pbs_state=NULL WHERE node_id=" + node)
     
