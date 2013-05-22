@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon zombie catcher, catch vagrant processes on compute nodes
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1
-# Last change: Initial version
+# Version: 1.1
+# Last change: Changed binary paths to variables
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -16,6 +16,12 @@
 import sys, os, re, subprocess, syslog, signal
 import xml.etree.ElementTree as ET
 from optparse import OptionParser
+
+
+
+qstat = "/opt/sam/torque/3.0.5/bin/qstat"
+bpstat = "/usr/bin/bpstat"
+ps = "/bin/ps"
 
 
 
@@ -52,7 +58,7 @@ job_data = {}
 signal.alarm(60)
 
 try:
-    qstat_info = subprocess.Popen(["/opt/sam/torque/3.0.5/bin/qstat", "-x"], stdin=None, stdout=subprocess.PIPE)
+    qstat_info = subprocess.Popen([qstat, "-x"], stdin=None, stdout=subprocess.PIPE)
     qstat_out = qstat_info.communicate()[0]
     
     signal.alarm(0)
@@ -116,9 +122,9 @@ for job in root.getiterator("Job"):
 signal.alarm(60)
 
 try:
-    ps_info = subprocess.Popen(["/bin/ps", "-e", "-o", "pid,euser,comm"], stdin=None, stdout=subprocess.PIPE)
+    ps_info = subprocess.Popen([ps, "-e", "-o", "pid,euser,comm"], stdin=None, stdout=subprocess.PIPE)
         
-    bpstat_info = subprocess.Popen(["/usr/bin/bpstat", "-P"], stdin=ps_info.stdout, stdout=subprocess.PIPE)
+    bpstat_info = subprocess.Popen([bpstat, "-P"], stdin=ps_info.stdout, stdout=subprocess.PIPE)
     ps_info.stdout.close()
     bpstat_out = bpstat_info.communicate()[0]
         
