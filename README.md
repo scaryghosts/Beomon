@@ -101,11 +101,11 @@ node you want to run it on.
 
 **beomon_display.py** is a CGI script to be ran by a Web server.  This will display a table of the
 current status of each node.  Hover over the node number to see the node's details (CPU type, RAM 
-amount, etc.).  This does not support Internet Explorer.  It uses style.css and jquery.stickytableheaders.js.  
+amount, etc.).  This does not support Internet Explorer.
+
+It uses style.css and [jquery.stickytableheaders.js](https://github.com/jmosbech/StickyTableHeaders).
 The style.css file is derived from unlicensed work by Adam Cerini of the University of Pittsburgh.  
-The file jquery.stickytableheaders.js is from Jonas Mosbech (https://github.com/jmosbech/StickyTableHeaders).  
-Note that jquery.stickytableheaders.js is released under and MIT license.  See the file for more 
-information.
+The file jquery.stickytableheaders.js is from [Jonas Mosbech](https://github.com/jmosbech).  
 
 
 **beomon_statsgen.py** will pull the node details (CPU type, RAM amount, etc.) out of the DB, create 
