@@ -76,14 +76,14 @@ capable of running a python script should work.
 
 ### The programs
 
-beomon_master_agent.py is ran on the master/head node of the cluster.  This 
+**beomon_master_agent.py** is ran on the master/head node of the cluster.  This 
 program checks the status (up, down, boot, error) of compute nodes and 
 updates the database.  Pass a string to the -n flag of which nodes to check.
 
 Example: `beomon_master_agent.py 0-5,7-9`
 
 
-beomon_compute_node_agent.py is ran on each compute node and check the status
+**beomon_compute_node_agent.py** is ran on each compute node and check the status
 of Infiniband, mount points, CPU/system temperature, etc.  It can be ran via
 the master/head node with:
 
@@ -94,12 +94,12 @@ with `99zzzbeomon`.  Note that in daemon mode the health is only checked once.  
 on every 5 minutes it will only update the DB saying it checked in.
 
 
-99zzzbeomon is a Beowulf init script.  Place it in /etc/beowulf/init.d and make it executable.
+**99zzzbeomon.sh** is a Beowulf init script.  Place it in /etc/beowulf/init.d and make it executable.
 Compute nodes should run it when they boot or you can run it by hand with an argument of which
 node you want to run it on.
 
 
-beomon_display.py is a CGI script to be ran by a Web server.  This will display a table of the
+**beomon_display.py** is a CGI script to be ran by a Web server.  This will display a table of the
 current status of each node.  Hover over the node number to see the node's details (CPU type, RAM 
 amount, etc.).  This does not support Internet Explorer.  It uses style.css and jquery.stickytableheaders.js.  
 The style.css file is derived from unlicensed work by Adam Cerini of the University of Pittsburgh.  
@@ -108,7 +108,12 @@ Note that jquery.stickytableheaders.js is released under and MIT license.  See t
 information.
 
 
-beomon_statsgen.py will pull the node details (CPU type, RAM amount, etc.) out of the DB, create 
+**beomon_statsgen.py** will pull the node details (CPU type, RAM amount, etc.) out of the DB, create 
 a CSV of these details then print the totals for the cluster.
 
 Example: `beomon_statsgen.py`
+
+
+**beomon_zombie_catcher.py** will attempt to find processes on compute nodes which are not from a running 
+job (zombies).  Note 'zombie' in this sense is not a Unix-style zombie process but
+a running process left over from a previous job.
