@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1
-# Last change: Changed MySQL server and binary paths to a variables
+# Version: 1.2
+# Last change: Fixed the printing of floats
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -120,7 +120,7 @@ for row in sorted(cursor.fetchall()):
         infiniband = "Yes"
     
     
-    csv_handle.write(str(node) + "," + cpu_type + "," + str(cpu_num) + "," + gpu + "," + infiniband + "," + scratch_size + "," + ram + "," + serial + "\n")
+    csv_handle.write(str(node) + "," + cpu_type + "," + str(cpu_num) + "," + gpu + "," + infiniband + "," + str(scratch_size) + "," + str(ram) + "," + serial + "\n")
     
     
     summary_stats["nodes"] += 1
