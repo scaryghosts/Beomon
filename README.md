@@ -4,7 +4,7 @@ Beomon
 Beomon is an application used to monitor the status of compute nodes in a
 Beowulf-style cluster and create a Web interface to view the status of the
 nodes.  Specifically this supports the University of Pittsburgh's HPC 
-cluster "Frank".  This software adds two node states not available in 
+cluster "[Frank](http://core.sam.pitt.edu/frank)".  This software adds two node states not available in 
 the standard Scyld/Beowulf install: orphaned and partnered.
 
 "Orphaned" means that the compute node is still alive and checking into
@@ -31,15 +31,15 @@ License
 Except where otherwise noted, this software is released under version three of the GNU General Public License (GPL) of the
 Free Software Foundation (FSF), the text of which is available at http://www.fsf.org/licensing/licenses/gpl-3.0.html.
 Use or modification of this software implies your acceptance of this license and its terms.
-This is a free software, you are free to change and redistribute it with the terms of the GNU GPL.
+This is free software, you are free to change and redistribute it with the terms of the GNU GPL.
 There is NO WARRANTY, not even for FITNESS FOR A PARTICULAR USE to the extent permitted by law.
 
 Installation
 ------------
 
 Beomon utilizes a MySQL (or compatible) database.  These instructions are for
-RHLE6/CentOS6 and assumes /opt/sam is available to all nodes.  Any Web server
-capable of running a python script should work.
+RHEL6/CentOS6 and assumes /opt/sam is available to all nodes.  Any Web server
+capable of running a Python script should work.
 
 ### Prepare the database
 * `yum install mysql-server mysql MySQL-python`
@@ -68,17 +68,17 @@ capable of running a python script should work.
 * `yum install httpd`
 * Add "LoadModule cgi_module modules/mod_cgi.so" to the configuration
 * Add "ScriptAlias /beomon /path/to/webroot/bemon-stuff/beomon_display.py" to the configuration
-* Copy style.css, jquery.stickytableheaders.js and jquery.min.js to /path/to/webroot/beomon-stuff/
+* Copy style.css, [jquery.stickytableheaders.js](https://github.com/jmosbech/StickyTableHeaders/tree/master/js) and [jquery.min.js](http://code.jquery.com/jquery-1.8.3.min.js) to /path/to/webroot/beomon-stuff/
 * Note: Where these files are put cannot be called "beomon" since that will trigger the ScriptAlias 
 * directive when the script pulls in the other CSS and JavaScript files.
-* Ensure the user httpd runs as can execute the program and access the other files
+* Ensure the user httpd runs as can execute the program and access the other files.
 * Go to http://your.web.server/beomon
 
 ### The programs
 
 **beomon_master_agent.py** is ran on the master/head node of the cluster.  This 
 program checks the status (up, down, boot, error) of compute nodes and 
-updates the database.  Pass a string to the -n flag of which nodes to check.
+updates the database.  Pass a string flag of which nodes to check.
 
 Example: `beomon_master_agent.py 0-5,7-9`
 
@@ -90,8 +90,8 @@ the master/head node with:
 `beorun --all-nodes --nolocal beomon_compute_node_agent.py`
 
 However, it is designed to be started in daemon mode on each compute node as they boot
-with `99zzzbeomon`.  Note that in daemon mode the health is only checked once.  From then 
-on every 5 minutes it will only update the DB saying it checked in.
+with `99zzzbeomon`.  Note that in daemon mode health is only checked once except for Infiniband then 
+every 5 minutes it will only update the DB saying it checked in.
 
 
 **99zzzbeomon.sh** is a Beowulf init script.  Place it in /etc/beowulf/init.d and make it executable.
@@ -110,8 +110,6 @@ The file jquery.stickytableheaders.js is from [Jonas Mosbech](https://github.com
 
 **beomon_statsgen.py** will pull the node details (CPU type, RAM amount, etc.) out of the DB, create 
 a CSV of these details then print the totals for the cluster.
-
-Example: `beomon_statsgen.py`
 
 
 **beomon_zombie_catcher.py** will attempt to find processes on compute nodes which are not from a running 
