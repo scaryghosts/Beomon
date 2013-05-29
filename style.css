@@ -1,47 +1,26 @@
-table.tablesorter {
-    margin: auto;
-    background: whitesmoke;
-    border-collapse: collapse;
-}
+/*
+ * Description: Beomon status viewer's CSS
+ * Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
+ * Derived from unlicensed work by Adam Cerini of the University of Pittsburgh
+ * Version: 2
+ * Last change: Split into two table designations
+*/
 
-table.tablesorter th, table.tablesorter thead th, table.tablesorter thead td {
-    border: 1px silver;
-    text-align: center;
-    padding: 0.4em;
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 15px;
-}
 
-table.tablesorter td {
-    border: 1px silver;
-    text-align: center;
-    padding: 0.2em;
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 14px;
-}
 
+
+
+/* General */
 tr:nth-child(odd) {
     background: blue;
     background: gainsboro;
 }
 
-table.tablesorter th {
-    background: #bcbfc2;
-    text-align: left;
-}
-
-table.tablesorter tr:hover td {
-   background: mintcream !important;
-}
-
-table.tablesorter caption {
-    margin-left: inherit;
-    margin-right: inherit;
-}
 
 body {
-    background-color:#A4A4A4;
+    background-color: #A4A4A4;
 }
+
 
 .title {
     text-align: center;
@@ -50,6 +29,7 @@ body {
     color: #F6F2F2;
 }
 
+
 span.dropt:hover {
     text-decoration: none; background: #ffffff; z-index: 6;
 }
@@ -57,19 +37,92 @@ span.dropt:hover {
 span.dropt span {
     position: absolute; left: -9999px;
     margin: 20px 0 0 0px; padding: 3px 3px 3px 3px;
-    border-style:solid; border-color:black; border-width:1px; z-index: 6;
+    border-style: solid; border-color: black; border-width: 1px; z-index: 6;
 }
 
 span.dropt:hover span {
-    left: 2%; background: #ffffff;
-} 
-
-span.dropt span {
-    position: absolute; left: -9999px;
-    margin: 4px 0 0 0px; padding: 3px 3px 3px 3px; 
-    border-style:solid; border-color:black; border-width:1px;
+    left: 2%; background: whitesmoke;
+    width: 350px;
 }
 
-span.dropt:hover span {
-    margin: 20px 0 0 170px; background: #ffffff; z-index:6; 
+td {
+    position: relative;
+}
+
+
+
+
+
+/* Compute nodes */
+table.compute_nodes {
+    margin: auto;
+    background: whitesmoke;
+    border-collapse: collapse;
+}
+
+table.compute_nodes th, table.compute_nodes thead th, table.compute_nodes thead td {
+    border: 1px silver;
+    text-align: center;
+    padding: 0.4em;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 15px;
+}
+
+table.compute_nodes td {
+    border: 1px silver;
+    text-align: center;
+    padding: 0.2em;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+}
+
+table.compute_nodes th {
+    background: #bcbfc2;
+    text-align: left;
+}
+
+table.compute_nodes tr:hover td {
+   background: mintcream !important;
+}
+
+table.compute_nodes caption {
+    margin-left: inherit;
+    margin-right: inherit;
+}
+
+
+
+
+
+/* Summary */
+table.summary {
+    margin: auto;
+    background: whitesmoke;
+    border-collapse: collapse;
+}
+
+table.summary th, table.summary thead th, table.summary thead td {
+    border: 1px silver;
+    text-align: center;
+    padding: 0.4em;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 15px;
+}
+
+table.summary td {
+    border: 1px silver;
+    text-align: left;
+    padding: 0.2em;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+}
+
+table.summary th {
+    background: #bcbfc2;
+    text-align: left;
+}
+
+table.summary caption {
+    margin-left: inherit;
+    margin-right: inherit;
 }

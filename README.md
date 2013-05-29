@@ -23,7 +23,7 @@ to be a possible master of node 10, one master will consider the node
 it up, down, boot or error.  Otherwise both masters consider it down
 or orphaned when no master is in control.
 
-![Beomon Display](display_screenshot.jpg)
+![Beomon Display](http://www.pitt.edu/~jaw171/display_screenshot.jpg)
 
 License
 -------
@@ -49,18 +49,20 @@ capable of running a Python script should work.
 * `chmod 600 /opt/sam/beomon/beomonpass.txt`
 * `service mysqld start`
 * `/usr/bin/mysql_secure_installation`
-* `mysql> CREATE DATABASE beomon;`
-* `mysql> GRANT ALL PRIVILEGES ON beomon.* TO 'beomon'@'10.54.50.%' IDENTIFIED BY 'somepass';`
-* `mysql> GRANT ALL PRIVILEGES ON beomon.* TO 'beomon'@'%.francis.sam.pitt.edu' IDENTIFIED BY 'somepass';`
+* `mysql> CREATE DATABASE compute;`
+* `mysql> GRANT ALL PRIVILEGES ON compute.* TO 'compute'@'10.54.50.%' IDENTIFIED BY 'somepass';`
+* `mysql> GRANT ALL PRIVILEGES ON compute.* TO 'compute'@'%.francis.sam.pitt.edu' IDENTIFIED BY 'somepass';`
 * `mysql> FLUSH PRIVILEGES;`
-* `mysql> USE beomon;`
-* `mysql> CREATE TABLE beomon (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_time BIGINT, `
+* `mysql> USE compute;`
+* `mysql> CREATE TABLE compute (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_time BIGINT, `
 `pbs_state VARCHAR(50), moab VARCHAR(50), infiniband VARCHAR(50), tempurature VARCHAR(50), scratch VARCHAR(50), `
 `panasas VARCHAR(50), home0 VARCHAR(50), home1 VARCHAR(50), home2 VARCHAR(50), home3 VARCHAR(50), home4 VARCHAR(50), `
 `home5 VARCHAR(50), gscratch0 VARCHAR(50), gscratch1 VARCHAR(50), gscratch2 VARCHAR(50), gscratch3 VARCHAR(50), `
 `gscratch4 VARCHAR(50), gscratch5 VARCHAR(50), datasam VARCHAR(50), datapkg VARCHAR(50), lchong_home VARCHAR(50), `
 `lchong_archive VARCHAR(50), lchong_work VARCHAR(50),cpu_type VARCHAR(100), cpu_num INT, gpu BOOL, `
 `scratch_size FLOAT, ram FLOAT, serial VARCHAR(50), last_check BIGINT);`
+* `mysql> CREATE TABLE cluster_health (node_id VARCHAR(50) NOT NULL UNIQUE KEY PRIMARY KEY, beoserv BOOL, bpmaster BOOL, `
+`recvstats BOOL, kickbackdaemon BOOL, moab BOOL, pbs_server BOOL, gold BOOL, last_check BIGINT);`
 
 
 ### Configure Apache httpd
@@ -74,7 +76,8 @@ capable of running a Python script should work.
 * Ensure the user httpd runs as can execute the program and access the other files.
 * Go to http://your.web.server/beomon
 
-### The programs
+The programs
+------------
 
 **beomon_master_agent.py** is ran on the master/head node of the cluster.  This 
 program checks the status (up, down, boot, error) of compute nodes and 
@@ -100,8 +103,8 @@ node you want to run it on.
 
 
 **beomon_display.py** is a CGI script to be ran by a Web server.  This will display a table of the
-current status of each node.  Hover over the node number to see the node's details (CPU type, RAM 
-amount, etc.).  This does not support Internet Explorer.
+current status of each compute node.  Hover over the node number to see the node's details (CPU type, RAM 
+amount, etc.).  It also displays a summary/status of head nodes and storage.  This does not support Internet Explorer.
 
 It uses style.css and [jquery.stickytableheaders.js](https://github.com/jmosbech/StickyTableHeaders).
 The style.css file is derived from unlicensed work by Adam Cerini of the University of Pittsburgh.  

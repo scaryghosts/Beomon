@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.5
-# Last change: Changed MySQL server and binary paths to a variables
+# Version: 1.3
+# Last change: Switched compute node SQL table name to 'compute', added process checks 
+# to check the master's health
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -15,13 +16,13 @@
 
 import sys
 sys.path.append("/opt/sam/beomon/modules/")
-import os, re, MySQLdb, subprocess, time, syslog, paramiko
+import os, re, MySQLdb, subprocess, time, syslog, paramiko, signal
 from optparse import OptionParser
 
 
 
-mysql_host = "clusman0a.frank.sam.pitt.edu"
-clusman_host = "clusman0a.frank.sam.pitt.edu"
+mysql_host = "clusman.frank.sam.pitt.edu"
+clusman_host = "clusman.frank.sam.pitt.edu"
 pbsnodes = "/usr/bin/pbsnodes"
 bpstat = "/usr/bin/bpstat"
 
@@ -60,13 +61,28 @@ except IndexError:
 
     
     
+hostname = os.uname()[1]
+
+
+    
 # Query MySQL for a given column of a given node
-def do_sql_query(column, node):
-        cursor.execute("SELECT " + column + " FROM beomon WHERE node_id=" + node)
+def compute_query(column, node):
+        cursor.execute("SELECT " + column + " FROM compute WHERE node_id=" + node)
         
         results = cursor.fetchone()
         
         return results[0]
+
+
+
+# Prepare for subprocess timeouts
+class Alarm(Exception):
+    pass
+
+def alarm_handler(signum, frame):
+    raise Alarm
+
+signal.signal(signal.SIGALRM, alarm_handler)
 
         
     
@@ -97,9 +113,60 @@ except MySQLError as err:
 
     
     
-# Determine our partner
-hostname = os.uname()[1]
     
+    
+#
+# Check our own health
+#
+
+# Add a row for ourself if one does not exist.
+if cursor.execute("SELECT node_id FROM cluster_health WHERE node_id='" + hostname.split(".")[0] + "'") == 0:
+    cursor.execute("INSERT INTO cluster_health (node_id) VALUES ('" + hostname.split(".")[0] + "')")
+
+# Get the list of current processes
+processes = []
+for pid in [pid for pid in os.listdir('/proc') if pid.isdigit()]:
+    try:
+        with open("/proc/" + pid + "/cmdline", "r") as procfile:
+            process = procfile.read()
+            
+            if process == "":
+                continue
+
+            # Remove the unprintable character at the end of the string
+            process = list(process)
+            process.pop()
+            process = "".join(process)
+            
+            processes.append(process)
+            
+    except IOError: # The process could have gone away, that's fine
+        pass
+
+
+# Are the processes we want alive?
+for proc_name in ["beoserv", "bpmaster", "recvstats", "kickbackdaemon"]:
+    if "/usr/sbin/" + proc_name in processes:
+        sys.stdout.write("Process " + proc_name + " found\n")
+        
+        cursor.execute("UPDATE cluster_health SET " + proc_name + "=1 WHERE node_id='" + hostname.split(".")[0] + "'")
+        
+    else:
+        sys.stdout.write("Process " + proc_name + " not found!\n")
+        
+        cursor.execute("UPDATE cluster_health SET " + proc_name + "=0 WHERE node_id='" + hostname.split(".")[0] + "'")
+        
+        
+# Report that we've now checked ourself
+cursor.execute("UPDATE cluster_health SET last_check=" + str(int(time.time())) + " WHERE node_id='" + hostname.split(".")[0] + "'")
+        
+del processes
+
+
+
+
+    
+# Determine our partner
 if hostname == "head0a.frank.sam.pitt.edu":
     partner = "head0b.frank.sam.pitt.edu"
 
@@ -126,7 +193,11 @@ elif hostname == "head3b.frank.sam.pitt.edu":
     
     
     
-# Get the output of beostat
+    
+
+#
+# Get the output of beostat and check each node
+#
 try:
     bpstat = subprocess.Popen([bpstat, "-l", nodes], stdout=subprocess.PIPE, shell=False)
     
@@ -157,8 +228,8 @@ for line in bpstat_out.split(os.linesep):
 
     
     # Add a row for the node if one does not exist.
-    if cursor.execute("SELECT node_id FROM beomon WHERE node_id=" + node) == 0:
-        cursor.execute("INSERT INTO beomon (node_id) VALUES (" + node + ")")
+    if cursor.execute("SELECT node_id FROM compute WHERE node_id=" + node) == 0:
+        cursor.execute("INSERT INTO compute (node_id) VALUES (" + node + ")")
 
         
     sys.stdout.write("Node: " + node + "\n")
@@ -172,7 +243,7 @@ for line in bpstat_out.split(os.linesep):
         num_state["up"] += 1
         
         # Get the last state and see if it matches the current state
-        last_state = do_sql_query("state", node)
+        last_state = compute_query("state", node)
         
         if last_state == "up":
             sys.stdout.write("State: up - known\n")
@@ -217,15 +288,15 @@ for line in bpstat_out.split(os.linesep):
             except Exception, err:
                 sys.stderr.write("Failed to online node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n")
             
-            cursor.execute("UPDATE beomon SET state='up', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET state='up', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
         
         
     elif status == "down": # Really could be orphan or partnered instead of down
         
         # Get the last state and times
-        last_state = do_sql_query("state", node)
-        last_check = do_sql_query("last_check", node)
-        state_time = do_sql_query("state_time", node)
+        last_state = compute_query("state", node)
+        last_check = compute_query("last_check", node)
+        state_time = compute_query("state_time", node)
         
         if last_check is None: last_check = 0
 
@@ -354,7 +425,7 @@ for line in bpstat_out.split(os.linesep):
                 except Exception, err:
                     sys.stderr.write("Failed to offline node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n")
                 
-                cursor.execute("UPDATE beomon SET state='orphan', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
+                cursor.execute("UPDATE compute SET state='orphan', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
         
         
         # The node has not checked in within the last 10 minutes, it's down
@@ -376,9 +447,9 @@ for line in bpstat_out.split(os.linesep):
             else:
                 sys.stdout.write("State: down - new\n")
                 
-                syslog.syslog(syslog.LOG_WARN, "Node " + node + " is not up, state: down")
+                syslog.syslog(syslog.LOG_WARNING, "Node " + node + " is not up, state: down")
                 
-                cursor.execute("UPDATE beomon SET state='down', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
+                cursor.execute("UPDATE compute SET state='down', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
                 
             
     elif status == "boot":
@@ -387,7 +458,7 @@ for line in bpstat_out.split(os.linesep):
         num_state["boot"] += 1
         
         # Get the last state and see if it matches the current state
-        last_state = do_sql_query("state", node)
+        last_state = compute_query("state", node)
         
         if last_state == "boot":
             sys.stdout.write("State: boot - known\n")
@@ -395,10 +466,10 @@ for line in bpstat_out.split(os.linesep):
         else:
             sys.stdout.write("State: boot - new\n")
             
-            cursor.execute("UPDATE beomon SET state='boot', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET state='boot', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
             
         # If the node has been in boot state for more than 120 minutes, log an alert
-        time_diff = int(time.time()) - int(do_sql_query("state_time", node))
+        time_diff = int(time.time()) - int(compute_query("state_time", node))
         
         if time_diff >= 7200:
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " is not up, state: boot")
@@ -410,7 +481,7 @@ for line in bpstat_out.split(os.linesep):
         num_state["error"] += 1
         
         # Get the last state and see if it matches the current state
-        last_state = do_sql_query("state", node)
+        last_state = compute_query("state", node)
         
         if last_state == "error":
             sys.stdout.write("State: error - known\n")
@@ -418,7 +489,7 @@ for line in bpstat_out.split(os.linesep):
         else:
             sys.stdout.write("State: error - new\n")
             
-            cursor.execute("UPDATE beomon SET state='error', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET state='error', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
             
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " is not up, state: error")
 
@@ -472,17 +543,17 @@ for line in bpstat_out.split(os.linesep):
                     
                     num_state["pbs_offline"] += 1
                     
-                    cursor.execute("UPDATE beomon SET pbs_state='offline' WHERE node_id=" + node)
+                    cursor.execute("UPDATE compute SET pbs_state='offline' WHERE node_id=" + node)
                     
                 elif pbs_state == "down":
                     sys.stdout.write("PBS: Down\n")
                     
-                    cursor.execute("UPDATE beomon SET pbs_state='down' WHERE node_id=" + node)
+                    cursor.execute("UPDATE compute SET pbs_state='down' WHERE node_id=" + node)
                     
                 else:
                     sys.stdout.write("PBS: OK\n")
                     
-                    cursor.execute("UPDATE beomon SET pbs_state='ok' WHERE node_id=" + node)
+                    cursor.execute("UPDATE compute SET pbs_state='ok' WHERE node_id=" + node)
                     
             stdout.close()
             
@@ -495,7 +566,7 @@ for line in bpstat_out.split(os.linesep):
 
             syslog.syslog(syslog.LOG_WARNING, "Failed to check PBS state node with `pbsnodes` on " + clusman_host + " for node: " + node)
             
-            cursor.execute("UPDATE beomon SET pbs_state=NULL WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET pbs_state=NULL WHERE node_id=" + node)
     
     
     
@@ -503,7 +574,7 @@ for line in bpstat_out.split(os.linesep):
     # Verify that the node is still checking in if it is up
     #    
     if state == "up":
-        last_check = do_sql_query("last_check", node)
+        last_check = compute_query("last_check", node)
         
         if last_check is None:
             sys.stderr.write("Node " + str(node) + " last check in time is NULL\n")

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2
-# Last change: Fixed the printing of floats
+# Version: 1.2.1
+# Last change: Switched compute node SQL table name to 'compute'
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -20,7 +20,7 @@ from optparse import OptionParser
 
 
 
-mysql_host = "clusman0a.frank.sam.pitt.edu"
+mysql_host = "clusman.frank.sam.pitt.edu"
 
 
 
@@ -36,8 +36,8 @@ parser = OptionParser("%prog [options]\n" +
 
 
 # Query MySQL for a given column of a given node
-def do_sql_query(column, node):
-        cursor.execute("SELECT " + column + " FROM beomon WHERE node_id=" + node)
+def compute_query(column, node):
+        cursor.execute("SELECT " + column + " FROM compute WHERE node_id=" + node)
         
         results = cursor.fetchone()
         
@@ -89,7 +89,7 @@ summary_stats = {
     
     
 # Loop through each node in the DB
-cursor.execute("SELECT node_id, cpu_type, cpu_num, gpu, infiniband, scratch_size, ram, serial FROM beomon")
+cursor.execute("SELECT node_id, cpu_type, cpu_num, gpu, infiniband, scratch_size, ram, serial FROM compute")
 
 for row in sorted(cursor.fetchall()):
     [node, cpu_type, cpu_num, gpu, infiniband, scratch_size, ram, serial] = row

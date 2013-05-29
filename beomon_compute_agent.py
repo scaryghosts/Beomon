@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.4.2
-# Last change: Changed MySQL server and binary paths to a variables
+# Version: 1.4.3
+# Last change: Switched compute node SQL table name to 'compute'
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -13,7 +13,7 @@
 
 
 
-mysql_host = "clusman0a.frank.sam.pitt.edu"
+mysql_host = "clusman.frank.sam.pitt.edu"
 ibv_devinfo = "/usr/bin/ibv_devinfo"
 ipmitool = "/usr/bin/ipmitool"
 lsmod = "/sbin/lsmod"
@@ -73,8 +73,8 @@ def connect_mysql():
 
         
 # Query MySQL for a given column of a given node
-def do_sql_query(cursor, column, node):
-    cursor.execute("SELECT " + column + " FROM beomon WHERE node_id=" + node)
+def compute_query(cursor, column, node):
+    cursor.execute("SELECT " + column + " FROM compute WHERE node_id=" + node)
     
     results = cursor.fetchone()
     
@@ -119,8 +119,8 @@ def run_to_completion(db):
     cursor = db.cursor()
     
     # Add a row for the node if one does not exist.
-    if cursor.execute("SELECT node_id FROM beomon WHERE node_id=" + node) == 0:
-        cursor.execute("INSERT INTO beomon (node_id) VALUES (" + node + ")")
+    if cursor.execute("SELECT node_id FROM compute WHERE node_id=" + node) == 0:
+        cursor.execute("INSERT INTO compute (node_id) VALUES (" + node + ")")
     
         
     # Determine if we are an orphan
@@ -154,7 +154,7 @@ def run_to_completion(db):
                 sys.stdout.write("Skipping PID " + str(pid) + "\n")
                  
                         
-        cursor.execute("UPDATE beomon SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
         
         if num_user_processes > 0:
             sys.stdout.write("It looks like I have a job running (" + str(num_user_processes) + " processes) ... Not rebooting myself\n")
@@ -182,8 +182,8 @@ def run_to_completion(db):
 def add_row(db):
     cursor = db.cursor()
     
-    if cursor.execute("SELECT node_id FROM beomon WHERE node_id=" + node) == 0:
-        cursor.execute("INSERT INTO beomon (node_id) VALUES (" + node + ")")
+    if cursor.execute("SELECT node_id FROM compute WHERE node_id=" + node) == 0:
+        cursor.execute("INSERT INTO compute (node_id) VALUES (" + node + ")")
             
         
         
@@ -201,26 +201,26 @@ def check_moab(db):
             
         sys.stdout.write("Moab: ok\n")
         
-        cursor.execute("UPDATE beomon SET moab='ok' WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET moab='ok' WHERE node_id=" + node)
     
     except Alarm:
         sys.stdout.write("Moab: Timeout\n")
         
-        cursor.execute("UPDATE beomon SET moab=NULL WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET moab=NULL WHERE node_id=" + node)
     
     except subprocess.CalledProcessError:
         sys.stdout.write("Moab: down\n")
         
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Moab in state 'down'")
         
-        cursor.execute("UPDATE beomon SET moab='down' WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET moab='down' WHERE node_id=" + node)
             
     except Exception as err:
         sys.stderr.write("Moab: sysfail (" + str(err) + ")\n")
         
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Moab in state 'sysfail'")
         
-        cursor.execute("UPDATE beomon SET moab='sysfail' WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET moab='sysfail' WHERE node_id=" + node)
 
         
         
@@ -234,7 +234,7 @@ def infiniband_check(db):
     if any(lower <= int(node) <= upper for (lower, upper) in ib_skip_ranges):
         sys.stdout.write("Infiniband: n/a\n") 
         
-        cursor.execute("UPDATE beomon SET infiniband='n/a' WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET infiniband='n/a' WHERE node_id=" + node)
         
     else:
         signal.alarm(30)
@@ -251,26 +251,26 @@ def infiniband_check(db):
                 if match:
                     sys.stdout.write("Infiniband: ok\n")
             
-                    cursor.execute("UPDATE beomon SET infiniband='ok' WHERE node_id=" + node)
+                    cursor.execute("UPDATE compute SET infiniband='ok' WHERE node_id=" + node)
             
                 else:
                     sys.stdout.write("Infiniband: down\n")
                     
                     syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Infiniband in state down")
             
-                    cursor.execute("UPDATE beomon SET infiniband='down' WHERE node_id=" + node)
+                    cursor.execute("UPDATE compute SET infiniband='down' WHERE node_id=" + node)
         
         except Alarm:
             sys.stdout.write("Infiniband: Timeout\n")
             
-            cursor.execute("UPDATE beomon SET infiniband=NULL WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET infiniband=NULL WHERE node_id=" + node)
             
         except Exception as err:
             sys.stderr.write("Infiniband: sysfail (" + str(err) + ")")
             
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Infiniband in state sysfail")
             
-            cursor.execute("UPDATE beomon SET infiniband='sysfail' WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET infiniband='sysfail' WHERE node_id=" + node)
             
 
         
@@ -298,7 +298,7 @@ def check_tempurature(db):
         else:
             sys.stdout.write("Tempurature: n/a\n")
             
-            cursor.execute("UPDATE beomon SET tempurature='n/a' WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET tempurature='n/a' WHERE node_id=" + node)
         #sensor_name = "CPU 1 Temp"
 
         signal.alarm(30)
@@ -319,7 +319,7 @@ def check_tempurature(db):
                     
                     sys.stdout.write("Tempurature: " + temp + "C (" + sensor_name + ")\n")
                     
-                    cursor.execute("UPDATE beomon SET tempurature='" + temp + "C (" + sensor_name + ")' WHERE node_id=" + node)
+                    cursor.execute("UPDATE compute SET tempurature='" + temp + "C (" + sensor_name + ")' WHERE node_id=" + node)
                     
                     break
                 
@@ -330,17 +330,17 @@ def check_tempurature(db):
             if not temp:
                 sys.stdout.write("Tempurature: unknown\n")
         
-                cursor.execute("UPDATE beomon SET tempurature='unknown' WHERE node_id=" + node)
+                cursor.execute("UPDATE compute SET tempurature='unknown' WHERE node_id=" + node)
 
     except Alarm:
         sys.stdout.write("Tempurature: Timeout")
         
-        cursor.execute("UPDATE beomon SET tempurature=NULL WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET tempurature=NULL WHERE node_id=" + node)
         
     except Exception as err:
         sys.stderr.write("Tempurature: sysfail (" + str(err) + ")")
         
-        cursor.execute("UPDATE beomon SET tempurature='sysfail' WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET tempurature='sysfail' WHERE node_id=" + node)
         
 
         
@@ -353,19 +353,19 @@ def check_scratch(db):
     if os.path.ismount("/scratch") is True:
         sys.stdout.write("/scratch: ok\n")
         
-        cursor.execute("UPDATE beomon SET scratch='ok' WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET scratch='ok' WHERE node_id=" + node)
             
         st = os.stat("/scratch")
         
         scratch_size = round(float(os.statvfs("/scratch")[2] * st.st_blksize) / 1024 / 1024 / 1024, 2)
         
-        cursor.execute("UPDATE beomon SET scratch_size=" + str(scratch_size) + " WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET scratch_size=" + str(scratch_size) + " WHERE node_id=" + node)
         
     else:
         sys.stdout.write("/scratch: failed\n")
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has /scratch in state failed")
         
-        cursor.execute("UPDATE beomon SET scratch='failed' WHERE node_id=" + node)    
+        cursor.execute("UPDATE compute SET scratch='failed' WHERE node_id=" + node)    
 
 
 
@@ -388,13 +388,13 @@ def check_filesystems(db):
         if os.path.ismount(mount_point) is True:
             sys.stdout.write(mount_point + ": ok\n")
             
-            cursor.execute("UPDATE beomon SET " + filesystems[mount_point] + "='ok' WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET " + filesystems[mount_point] + "='ok' WHERE node_id=" + node)
 
         else:
             sys.stdout.write(mount_point + ": failed\n")
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has " + mount_point + " in state failed")
             
-            cursor.execute("UPDATE beomon SET " + filesystems[mount_point] + "='failed' WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET " + filesystems[mount_point] + "='failed' WHERE node_id=" + node)
         
         
         
@@ -456,7 +456,7 @@ def get_cpu_model(db):
             
             sys.stdout.write("CPU Type: " + cpu_type + "\n")
             
-            cursor.execute("UPDATE beomon SET cpu_type='" + cpu_type + "' WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET cpu_type='" + cpu_type + "' WHERE node_id=" + node)
             
             break
 
@@ -472,7 +472,7 @@ def get_cpu_count(db):
     
     sys.stdout.write("CPU Cores: " + str(num_cpu_cores) + "\n")
 
-    cursor.execute("UPDATE beomon SET cpu_num=" + str(num_cpu_cores) + " WHERE node_id=" + node)
+    cursor.execute("UPDATE compute SET cpu_num=" + str(num_cpu_cores) + " WHERE node_id=" + node)
         
         
         
@@ -498,7 +498,7 @@ def get_ram_amount(db):
             
     sys.stdout.write("RAM: " + str(ram_amount) + " GB\n")
 
-    cursor.execute("UPDATE beomon SET ram=" + str(ram_amount) + " WHERE node_id=" + node)
+    cursor.execute("UPDATE compute SET ram=" + str(ram_amount) + " WHERE node_id=" + node)
 
         
         
@@ -506,7 +506,7 @@ def get_ram_amount(db):
 def show_scratch_size(db):
     cursor = db.cursor()
     
-    scratch_size = do_sql_query(cursor, "scratch_size", node)
+    scratch_size = compute_query(cursor, "scratch_size", node)
     
     sys.stdout.write("/scratch Size: " + str(scratch_size) + " GB\n")
         
@@ -535,7 +535,7 @@ def get_gpu_info(db):
                     gpu = True
                     
                     sys.stdout.write("GPU?: 1\n")
-                    cursor.execute("UPDATE beomon SET gpu=1 WHERE node_id=" + node)
+                    cursor.execute("UPDATE compute SET gpu=1 WHERE node_id=" + node)
                     
                     break
                 
@@ -545,7 +545,7 @@ def get_gpu_info(db):
             if not gpu == True:
                 sys.stdout.write("GPU?: 0\n")
                 
-                cursor.execute("UPDATE beomon SET gpu=0 WHERE node_id=" + node)
+                cursor.execute("UPDATE compute SET gpu=0 WHERE node_id=" + node)
     
     except Alarm:
         sys.stdout.write("Failed to check for GPU, process timed out.\n")
@@ -578,7 +578,7 @@ def get_seral_number(db):
                 
             sys.stdout.write("Serial: " + serial + "\n")
             
-            cursor.execute("UPDATE beomon SET serial='" + serial + "' WHERE node_id=" + node)
+            cursor.execute("UPDATE compute SET serial='" + serial + "' WHERE node_id=" + node)
 
     except Alarm:
         sys.stdout.write("Failed to get serial number, process timed out.\n")
@@ -614,7 +614,7 @@ if options.daemonize == False:
     
     # Report that we've now checked ourself
     cursor = db.cursor()
-    cursor.execute("UPDATE beomon SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
+    cursor.execute("UPDATE compute SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
     
     
     # Close the DB, we're done
@@ -623,7 +623,7 @@ if options.daemonize == False:
     
 else:
     # Check if our PID or lock files already exist
-    if os.path.exists("/var/lock/subsys/beomon_compute_agent") and not os.path.exists("/var/run/beomon_compute_agent.pid"):
+    if os.path.exists("/var/lock/subsys/beomon_compute_agent") and not os.path.exists("/var/run/bemon_compute_agent.pid"):
         sys.stderr.write("PID file not found but subsys locked\n")
         sys.exit(1)
         
@@ -725,7 +725,7 @@ else:
         infiniband_check(db)
         
         # Report that we've now checked ourself
-        cursor.execute("UPDATE beomon SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
+        cursor.execute("UPDATE compute SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
         
         # Sleep for 5 minutes, if we wake with time left go back to sleep.
         wake_time = int(time.time()) + 300
