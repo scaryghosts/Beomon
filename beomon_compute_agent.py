@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.4.3
-# Last change: Switched compute node SQL table name to 'compute'
+# Version: 1.5
+# Last change: Changed how disk and memory size are found to make them more accurate
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -23,7 +23,7 @@ dmidecode = "/usr/sbin/dmidecode"
 
 import sys
 sys.path.append("/opt/sam/beomon/modules/")
-import os, re, subprocess, time, syslog, signal
+import os, re, subprocess, time, syslog, signal, string
 from MySQLdb import connect
 from optparse import OptionParser
 from multiprocessing import cpu_count
@@ -344,28 +344,28 @@ def check_tempurature(db):
         
 
         
-# /scratch
-def check_scratch(db):
-    cursor = db.cursor()
+## /scratch
+#def check_scratch(db):
+    #cursor = db.cursor()
 
-    scratch_size = int()
+    #scratch_size = int()
 
-    if os.path.ismount("/scratch") is True:
-        sys.stdout.write("/scratch: ok\n")
+    #if os.path.ismount("/scratch") is True:
+        #sys.stdout.write("/scratch: ok\n")
         
-        cursor.execute("UPDATE compute SET scratch='ok' WHERE node_id=" + node)
+        #cursor.execute("UPDATE compute SET scratch='ok' WHERE node_id=" + node)
             
-        st = os.stat("/scratch")
+        #st = os.stat("/scratch")
         
-        scratch_size = round(float(os.statvfs("/scratch")[2] * st.st_blksize) / 1024 / 1024 / 1024, 2)
+        #scratch_size = round(float(os.statvfs("/scratch")[2] * st.st_blksize) / 1024 / 1024 / 1024, 2)
         
-        cursor.execute("UPDATE compute SET scratch_size=" + str(scratch_size) + " WHERE node_id=" + node)
+        #cursor.execute("UPDATE compute SET scratch_size=" + str(scratch_size) + " WHERE node_id=" + node)
         
-    else:
-        sys.stdout.write("/scratch: failed\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has /scratch in state failed")
+    #else:
+        #sys.stdout.write("/scratch: failed\n")
+        #syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has /scratch in state failed")
         
-        cursor.execute("UPDATE compute SET scratch='failed' WHERE node_id=" + node)    
+        #cursor.execute("UPDATE compute SET scratch='failed' WHERE node_id=" + node)    
 
 
 
@@ -381,6 +381,7 @@ def check_filesystems(db):
         "/home1" : "home1",
         "/home2" : "home2",
         "/pan" : "panasas",
+        "/scratch" : "scratch",
     }
 
     
@@ -482,33 +483,56 @@ def get_ram_amount(db):
     
     ram_amount = int()
 
-    mem_info_file = open("/proc/meminfo", "r")
-
-    for line in mem_info_file:
-        line = line.rstrip()
-
-        mem_match = re.match("^MemTotal:\s+(\d+)", line)
+    signal.alarm(30)
+    
+    try:
+        with open(os.devnull, "w") as devnull:
+            info = subprocess.Popen([dmidecode, "--type", "memory"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
+            out = info.communicate()[0]
+            
+            signal.alarm(0)
+            
+            out = out.rstrip()
+            
+            for dimm in re.findall("Size:\s+(\d+)", out):
+                ram_amount = ram_amount + int(dimm)
+                
+    except Alarm:
+        sys.stdout.write("Failed to get RAM amount, process timed out.\n")
         
-        if mem_match:
-            ram_amount = int(mem_match.group(1))
+    except Exception as err:
+        sys.stderr.write("Failed to get RAM amount, process failed: " + str(err))
+        
+        
+    if ram_amount != 0:
+        sys.stdout.write("RAM: " + str(ram_amount / 1024) + " GB\n")
             
-            break
-
-    ram_amount = round(float(ram_amount) / 1024 / 1024, 2)
-            
-    sys.stdout.write("RAM: " + str(ram_amount) + " GB\n")
-
-    cursor.execute("UPDATE compute SET ram=" + str(ram_amount) + " WHERE node_id=" + node)
-
+        cursor.execute("UPDATE compute SET ram='" + str(ram_amount / 1024) + "' WHERE node_id=" + node)
+    
         
         
 # /scratch size we found earlier
 def show_scratch_size(db):
     cursor = db.cursor()
     
-    scratch_size = compute_query(cursor, "scratch_size", node)
+    scratch_size = int()
     
+    for drive_letter in string.ascii_lowercase:
+        # Stop if we have no more drives to look at
+        if not os.path.isfile("/sys/block/sd" + drive_letter + "/size"):
+            break
+            
+        with open("/sys/block/sd" + drive_letter + "/size", "r") as drive_size_file_handle:
+            drive_size = drive_size_file_handle.read()
+            
+            drive_size = (int(drive_size) * 512) / 1000 / 1000 / 1000
+            
+            scratch_size = scratch_size + drive_size
+            
+            
     sys.stdout.write("/scratch Size: " + str(scratch_size) + " GB\n")
+    
+    cursor.execute("UPDATE compute SET scratch_size=" + str(scratch_size) + " WHERE node_id=" + node)
         
         
         
@@ -601,7 +625,7 @@ if options.daemonize == False:
     check_moab(db)
     infiniband_check(db)
     #check_tempurature(db)
-    check_scratch(db)
+    #check_scratch(db)
     check_filesystems(db)
     check_hyperthreading()
     get_cpu_model(db)
@@ -705,7 +729,7 @@ else:
     add_row(db)
     check_moab(db)
     #check_tempurature(db)
-    check_scratch(db)
+    #check_scratch(db)
     check_filesystems(db)
     check_hyperthreading()
     get_cpu_model(db)
