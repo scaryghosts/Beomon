@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.6/gcc45/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.5
-# Last change: Changed how disk and memory size are found to make them more accurate
+# Version: 1.5.1
+# Last change: Removed unused code
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -23,10 +23,11 @@ dmidecode = "/usr/sbin/dmidecode"
 
 import sys
 sys.path.append("/opt/sam/beomon/modules/")
-import os, re, subprocess, time, syslog, signal, string
+import os, re, subprocess, time, syslog, signal
 from MySQLdb import connect
 from optparse import OptionParser
 from multiprocessing import cpu_count
+from string import ascii_lowercase
 
 
 
@@ -109,68 +110,7 @@ if match is None:
 
 node = re.sub("^n", "", hostname)
         
-        
-        
-##
-## Run to completion
-## 
-        
-def run_to_completion(db):
-    cursor = db.cursor()
-    
-    # Add a row for the node if one does not exist.
-    if cursor.execute("SELECT node_id FROM compute WHERE node_id=" + node) == 0:
-        cursor.execute("INSERT INTO compute (node_id) VALUES (" + node + ")")
-    
-        
-    # Determine if we are an orphan
-    if True:
-        print "I have a master"
-    
-    else:
-        sys.stderr.write("OH NO, I'M AN ORPHAN!\n")
-        
-        syslog.syslog(syslog.LOG_WARNING, "OH NO, I'M AN ORPHAN!")
-        
-        num_user_processes = 0
-        
-        # Check if we have any non-root and non-nscd processes
-        for pid in os.listdir("/proc"):
-            if not pid.isdigit(): continue
-            
-            try:
-                with open("/proc/" + pid + "/status", "r") as proc_status_file:
-                    for line in proc_status_file:
-                        line = line.rstrip()
 
-                        match = re.match("^Uid:\s+(\d+)", line)
-            
-                        if match:
-                            uid = int(match.group(1))
-                            
-                            if (uid != 0 and uid != 28):
-                                num_user_processes += 1
-            except IOError:
-                sys.stdout.write("Skipping PID " + str(pid) + "\n")
-                 
-                        
-        cursor.execute("UPDATE compute SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
-        
-        if num_user_processes > 0:
-            sys.stdout.write("It looks like I have a job running (" + str(num_user_processes) + " processes) ... Not rebooting myself\n")
-            
-        else:
-            sys.stdout.write("No jobs appear to be running ... Rebooting myself NOW\n")
-            
-            syslog.syslog(syslog.LOG_WARNING, "No jobs appear to be running ... Rebooting myself NOW\n")
-            
-            sysrq_handle = open("/proc/sys/kernel/sysrq", "w")
-            sysrq_handle.write("1")
-            
-            #sysrq_trigger = open("/proc/sysrq-trigger", "w")
-            #sysrq_trigger.write("b")
-        
-        sys.exit(0)
 
         
     
@@ -341,31 +281,6 @@ def check_tempurature(db):
         sys.stderr.write("Tempurature: sysfail (" + str(err) + ")")
         
         cursor.execute("UPDATE compute SET tempurature='sysfail' WHERE node_id=" + node)
-        
-
-        
-## /scratch
-#def check_scratch(db):
-    #cursor = db.cursor()
-
-    #scratch_size = int()
-
-    #if os.path.ismount("/scratch") is True:
-        #sys.stdout.write("/scratch: ok\n")
-        
-        #cursor.execute("UPDATE compute SET scratch='ok' WHERE node_id=" + node)
-            
-        #st = os.stat("/scratch")
-        
-        #scratch_size = round(float(os.statvfs("/scratch")[2] * st.st_blksize) / 1024 / 1024 / 1024, 2)
-        
-        #cursor.execute("UPDATE compute SET scratch_size=" + str(scratch_size) + " WHERE node_id=" + node)
-        
-    #else:
-        #sys.stdout.write("/scratch: failed\n")
-        #syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has /scratch in state failed")
-        
-        #cursor.execute("UPDATE compute SET scratch='failed' WHERE node_id=" + node)    
 
 
 
@@ -512,12 +427,12 @@ def get_ram_amount(db):
         
         
 # /scratch size we found earlier
-def show_scratch_size(db):
+def scratch_size(db):
     cursor = db.cursor()
     
     scratch_size = int()
     
-    for drive_letter in string.ascii_lowercase:
+    for drive_letter in ascii_lowercase:
         # Stop if we have no more drives to look at
         if not os.path.isfile("/sys/block/sd" + drive_letter + "/size"):
             break
@@ -625,13 +540,12 @@ if options.daemonize == False:
     check_moab(db)
     infiniband_check(db)
     #check_tempurature(db)
-    #check_scratch(db)
     check_filesystems(db)
     check_hyperthreading()
     get_cpu_model(db)
     get_cpu_count(db)
     get_ram_amount(db)
-    show_scratch_size(db)
+    scratch_size(db)
     get_gpu_info(db)
     get_seral_number(db)
     
@@ -729,13 +643,12 @@ else:
     add_row(db)
     check_moab(db)
     #check_tempurature(db)
-    #check_scratch(db)
     check_filesystems(db)
     check_hyperthreading()
     get_cpu_model(db)
     get_cpu_count(db)
     get_ram_amount(db)
-    show_scratch_size(db)
+    scratch_size(db)
     get_gpu_info(db)
     get_seral_number(db)
 
