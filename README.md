@@ -1,9 +1,7 @@
 Beomon
 ======
 
-Beomon is an application used to monitor the status of compute nodes in a
-Beowulf-style cluster and create a Web interface to view the status of the
-nodes.  Specifically this supports the University of Pittsburgh's HPC 
+Beomon is an application used to monitor the status of the University of Pittsburgh's HPC 
 cluster "[Frank](http://core.sam.pitt.edu/frank)".  This software adds two node states not available in 
 the standard Scyld/Beowulf install: orphaned and partnered.
 
@@ -20,10 +18,10 @@ master node.  This is needed to support Scyld's active-active master
 configuration.  For example with master nodes head0a and head0b both configured
 to be a possible master of node 10, one master will consider the node 
 "partnered" while the other in control of the compute node considers
-it up, down, boot or error.  Otherwise both masters consider it down
+it up, boot or error.  Otherwise both masters consider it down
 or orphaned when no master is in control.
 
-![Beomon Display](http://www.pitt.edu/~jaw171/display_screenshot.jpg)
+![Beomon Display](http://www.pitt.edu/~jaw171/beomon_display_screenshot.jpg)
 
 License
 -------
@@ -37,32 +35,35 @@ There is NO WARRANTY, not even for FITNESS FOR A PARTICULAR USE to the extent pe
 Installation
 ------------
 
-Beomon utilizes a MySQL (or compatible) database.  These instructions are for
+Beomon utilizes a MongoDB database.  These instructions are for
 RHEL6/CentOS6 and assumes /opt/sam is available to all nodes.  Any Web server
-capable of running a Python script should work.
+capable of running a Python script should work but here I use Apache httpd.
+
+### Install MongoDB
+* Add the [10gen repository](http://docs.mongodb.org/manual/tutorial/install-mongodb-on-red-hat-centos-or-fedora-linux/)
+* Install MongoDB: `yum install mongo-10gen mongo-10gen-server`
+* Enable authentication: Edit /etc/mongod.conf and set 'auth = true'
+* Optionally, disable the Web interface and preallocation: 'nohttpinterface = true' and 'noprealloc = true'
+* Start mongod: `service mongod start`
 
 ### Prepare the database
-* `yum install mysql-server mysql MySQL-python`
-* `rsync -Pah /usr/lib64/python2.6/site-packages/MySQLdb /opt/sam/beomon/modules/`
-* `rsync -Pah /usr/lib64/python2.6/site-packages/_mysql* /opt/sam/beomon/modules/`
-* `echo 'somepass' > /opt/sam/beomon/beomonpass.txt`
-* `chmod 600 /opt/sam/beomon/beomonpass.txt`
-* `service mysqld start`
-* `/usr/bin/mysql_secure_installation`
-* `mysql> CREATE DATABASE compute;`
-* `mysql> GRANT ALL PRIVILEGES ON compute.* TO 'compute'@'10.54.50.%' IDENTIFIED BY 'somepass';`
-* `mysql> GRANT ALL PRIVILEGES ON compute.* TO 'compute'@'%.francis.sam.pitt.edu' IDENTIFIED BY 'somepass';`
-* `mysql> FLUSH PRIVILEGES;`
-* `mysql> USE compute;`
-* `mysql> CREATE TABLE compute (node_id INT NOT NULL UNIQUE KEY PRIMARY KEY, state VARCHAR(50), state_time BIGINT, `
-`pbs_state VARCHAR(50), moab VARCHAR(50), infiniband VARCHAR(50), tempurature VARCHAR(50), scratch VARCHAR(50), `
-`panasas VARCHAR(50), home0 VARCHAR(50), home1 VARCHAR(50), home2 VARCHAR(50), home3 VARCHAR(50), home4 VARCHAR(50), `
-`home5 VARCHAR(50), gscratch0 VARCHAR(50), gscratch1 VARCHAR(50), gscratch2 VARCHAR(50), gscratch3 VARCHAR(50), `
-`gscratch4 VARCHAR(50), gscratch5 VARCHAR(50), datasam VARCHAR(50), datapkg VARCHAR(50), lchong_home VARCHAR(50), `
-`lchong_archive VARCHAR(50), lchong_work VARCHAR(50),cpu_type VARCHAR(100), cpu_num INT, gpu BOOL, `
-`scratch_size FLOAT, ram FLOAT, serial VARCHAR(50), last_check BIGINT);`
-* `mysql> CREATE TABLE cluster_health (node_id VARCHAR(50) NOT NULL UNIQUE KEY PRIMARY KEY, beoserv BOOL, bpmaster BOOL, `
-`recvstats BOOL, kickbackdaemon BOOL, moab BOOL, pbs_server BOOL, gold BOOL, last_check BIGINT);`
+* Enter the mongo shell: `mongo`
+* Switch to the admin database: `> use admin`
+* Create an admin user: `> db.addUser("admin", "somepass")`
+* Authenticate as the admin user: `>db.auth("admin", "somepass")`
+* Switch to the beomon database: `> use beomon`
+* Create the beomon user: `> db.addUser("beomon", "somepass")`
+
+
+### Prepare clients
+* `yum install python-devel gcc`
+* Install PyMongo: `mkdir pymongo; cd pymongo; wget https://github.com/mongodb/mongo-python-driver/archive/v2.5.zip`
+* `unzip v2.5`
+* `/opt/sam/python/2.7.5/gcc447/bin/python setup.py build`
+* `/opt/sam/python/2.7.5/gcc447/bin/python setup.py install --prefix=/opt/sam/python/2.7.5/gcc447/`
+* Repeat for paramiko
+* Create the password file: `echo 'somepass' > /opt/sam/beomon/beomonpass.txt`
+* Secure the password file: `chmod 600 /opt/sam/beomon/beomonpass.txt`
 
 
 ### Configure Apache httpd
@@ -71,7 +72,7 @@ capable of running a Python script should work.
 * Add "LoadModule cgi_module modules/mod_cgi.so" to the configuration
 * Add "ScriptAlias /beomon /path/to/webroot/bemon-stuff/beomon_display.py" to the configuration
 * Copy style.css, [jquery.stickytableheaders.js](https://github.com/jmosbech/StickyTableHeaders/tree/master/js) and [jquery.min.js](http://code.jquery.com/jquery-1.8.3.min.js) to /path/to/webroot/beomon-stuff/
-* Note: Where these files are put cannot be called "beomon" since that will trigger the ScriptAlias 
+* Note: The directory these files are put cannot be called "beomon" since that will trigger the ScriptAlias 
 * directive when the script pulls in the other CSS and JavaScript files.
 * Ensure the user httpd runs as can execute the program and access the other files.
 * Go to http://your.web.server/beomon
@@ -79,40 +80,36 @@ capable of running a Python script should work.
 The programs
 ------------
 
-**beomon_master_agent.py** is ran on the master/head node of the cluster.  This 
-program checks the status (up, down, boot, error) of compute nodes and 
-updates the database.  Pass a string flag of which nodes to check.
+**beomon_master_agent.py** is ran on the master/head nodes of the cluster.  This 
+program checks the status (up, down, boot, error, orphan) of compute nodes and 
+updates the database.  To use it pass a string of which nodes to check.
 
 Example: `beomon_master_agent.py 0-5,7-9`
 
 
-**beomon_compute_node_agent.py** is ran on each compute node and check the status
-of Infiniband, mount points, CPU/system temperature, etc.  It can be ran via
-the master/head node with:
+**beomon_compute_node_agent.py** is ran on each compute node and checks the status
+of Infiniband, mount points, etc as well as gathering system information such as RAM size, 
+CPU count, etc.  It can be ran via the master/head node with:
 
 `beorun --all-nodes --nolocal beomon_compute_node_agent.py`
 
 However, it is designed to be started in daemon mode on each compute node as they boot
-with `99zzzbeomon`.  Note that in daemon mode health is only checked once except for Infiniband then 
-every 5 minutes it will only update the DB saying it checked in.
+with `99zzzbeomon`.  Note that in daemon mode health is only checked once (except for Infiniband) then 
+every 5 minutes it will only update the DB saying it checked in (and check Infiniband again).
 
 
 **99zzzbeomon.sh** is a Beowulf init script.  Place it in /etc/beowulf/init.d and make it executable.
 Compute nodes should run it when they boot or you can run it by hand with an argument of which
-node you want to run it on.
+node you want to start the compute agent on.
 
 
-**beomon_display.py** is a CGI script to be ran by a Web server.  This will display a table of the
+**beomon_display.py** is a CGI program to be ran by a Web server.  This will display a table of the
 current status of each compute node.  Hover over the node number to see the node's details (CPU type, RAM 
 amount, etc.).  It also displays a summary/status of head nodes and storage.  This does not support Internet Explorer.
 
 It uses style.css and [jquery.stickytableheaders.js](https://github.com/jmosbech/StickyTableHeaders).
 The style.css file is derived from unlicensed work by Adam Cerini of the University of Pittsburgh.  
 The file jquery.stickytableheaders.js is from [Jonas Mosbech](https://github.com/jmosbech).  
-
-
-**beomon_statsgen.py** will pull the node details (CPU type, RAM amount, etc.) out of the DB, create 
-a CSV of these details then print the totals for the cluster.
 
 
 **beomon_zombie_catcher.py** will attempt to find processes on compute nodes which are not from a running 

@@ -1,9 +1,8 @@
-#!/usr/bin/env python
+#!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.3
-# Last change: Switched compute node SQL table name to 'compute', added process checks 
-# to check the master's health
+# Version: 2
+# Last change: Switched from MySQL to MongoDB
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -14,22 +13,18 @@
 
 
 
-import sys
-sys.path.append("/opt/sam/beomon/modules/")
-import os, re, MySQLdb, subprocess, time, syslog, paramiko, signal
+import sys, os, re, pymongo, subprocess, time, syslog, paramiko, signal
 from optparse import OptionParser
 
 
 
-mysql_host = "clusman.frank.sam.pitt.edu"
+mongo_host = "clusman.frank.sam.pitt.edu"
 clusman_host = "clusman.frank.sam.pitt.edu"
-pbsnodes = "/usr/bin/pbsnodes"
+pbsnodes = "/opt/sam/torque/3.0.6-clusman/bin/pbsnodes"
 bpstat = "/usr/bin/bpstat"
-
-
-
+red = "\033[31m"
+endcolor = '\033[0m' # end color
 nodes = ""
-
 num_state = {
     "down" : 0,
     "boot" : 0,
@@ -52,6 +47,7 @@ parser = OptionParser("%prog [options] $nodes\n" +
 (options, args) = parser.parse_args()
 
 
+
 try:
     nodes = sys.argv[1]
     
@@ -64,14 +60,6 @@ except IndexError:
 hostname = os.uname()[1]
 
 
-    
-# Query MySQL for a given column of a given node
-def compute_query(column, node):
-        cursor.execute("SELECT " + column + " FROM compute WHERE node_id=" + node)
-        
-        results = cursor.fetchone()
-        
-        return results[0]
 
 
 
@@ -100,14 +88,15 @@ dbpasshandle.close()
     
 # Open a DB connection
 try:
-    db = MySQLdb.connect(
-        host=mysql_host, user="beomon",
-        passwd=dbpass, db="beomon"
-    )
-                                             
-    cursor = db.cursor()
+    mongo_client = pymongo.MongoClient(mongo_host)
+
+    db = mongo_client.beomon
     
-except MySQLError as err:
+    db.authenticate("beomon", dbpass)
+    
+    del(dbpass)
+    
+except Exception as err:
     sys.stderr.write("Failed to connect to the Beomon database: " + str(err) + "\n")
     sys.exit(1)
 
@@ -118,10 +107,6 @@ except MySQLError as err:
 #
 # Check our own health
 #
-
-# Add a row for ourself if one does not exist.
-if cursor.execute("SELECT node_id FROM cluster_health WHERE node_id='" + hostname.split(".")[0] + "'") == 0:
-    cursor.execute("INSERT INTO cluster_health (node_id) VALUES ('" + hostname.split(".")[0] + "')")
 
 # Get the list of current processes
 processes = []
@@ -145,68 +130,132 @@ for pid in [pid for pid in os.listdir('/proc') if pid.isdigit()]:
 
 
 # Are the processes we want alive?
+new_head_clusman_data = {}
 for proc_name in ["beoserv", "bpmaster", "recvstats", "kickbackdaemon"]:
     if "/usr/sbin/" + proc_name in processes:
         sys.stdout.write("Process " + proc_name + " found\n")
         
-        cursor.execute("UPDATE cluster_health SET " + proc_name + "=1 WHERE node_id='" + hostname.split(".")[0] + "'")
+        new_head_clusman_data["processes." + proc_name] = True
         
     else:
-        sys.stdout.write("Process " + proc_name + " not found!\n")
+        sys.stdout.write(red + "Process " + proc_name + " not found!\n" + endcolor)
         
-        cursor.execute("UPDATE cluster_health SET " + proc_name + "=0 WHERE node_id='" + hostname.split(".")[0] + "'")
+        new_head_clusman_data["processes." + proc_name] = False
         
-        
-# Report that we've now checked ourself
-cursor.execute("UPDATE cluster_health SET last_check=" + str(int(time.time())) + " WHERE node_id='" + hostname.split(".")[0] + "'")
-        
+
 del processes
 
 
 
 
     
-# Determine our partner
-if hostname == "head0a.frank.sam.pitt.edu":
+# Determine our partner and note what nodes we are responible for
+if hostname == "headnode0.frank.sam.pitt.edu":
+    partner = "headnode1.frank.sam.pitt.edu"
+    
+    new_head_clusman_data["compute_node_class"] = "x"
+    new_head_clusman_data["primary_of"] = "x"
+    new_head_clusman_data["secondary_of"] = "x"
+    
+elif hostname == "headnode1.frank.sam.pitt.edu":
+    partner = "headnode0.frank.sam.pitt.edu"
+    
+    new_head_clusman_data["compute_node_class"] = "x"
+    new_head_clusman_data["primary_of"] = "x"
+    new_head_clusman_data["secondary_of"] = "x"
+    
+elif hostname == "head0a.frank.sam.pitt.edu":
     partner = "head0b.frank.sam.pitt.edu"
-
+    
+    new_head_clusman_data["compute_node_class"] = "Original Frank and Fermi Penguin"
+    new_head_clusman_data["primary_of"] = "0-88"
+    new_head_clusman_data["secondary_of"] = "89-176"
+    
 elif hostname == "head0b.frank.sam.pitt.edu":
     partner = "head0a.frank.sam.pitt.edu"
+    
+    new_head_clusman_data["compute_node_class"] = "Original Frank and Fermi Penguin"
+    new_head_clusman_data["primary_of"] = "89-176"
+    new_head_clusman_data["secondary_of"] = "0-88"
     
 elif hostname == "head1a.frank.sam.pitt.edu":
     partner = "head1b.frank.sam.pitt.edu"
     
+    new_head_clusman_data["compute_node_class"] = "IBM"
+    new_head_clusman_data["primary_of"] = "177-209"
+    new_head_clusman_data["secondary_of"] = "210-241"
+    
 elif hostname == "head1b.frank.sam.pitt.edu":
     partner = "head1a.frank.sam.pitt.edu"
+    
+    new_head_clusman_data["compute_node_class"] = "IBM"
+    new_head_clusman_data["primary_of"] = "210-241"
+    new_head_clusman_data["secondary_of"] = "177-209"
     
 elif hostname == "head2a.frank.sam.pitt.edu":
     partner = "head2b.frank.sam.pitt.edu"
     
+    new_head_clusman_data["compute_node_class"] = "Intel Sandybridge"
+    new_head_clusman_data["primary_of"] = "243-284"
+    new_head_clusman_data["secondary_of"] = "285-324"
+    
 elif hostname == "head2b.frank.sam.pitt.edu":
     partner = "head2a.frank.sam.pitt.edu"
+    
+    new_head_clusman_data["compute_node_class"] = "Intel Sandybridge"
+    new_head_clusman_data["primary_of"] = "285-324"
+    new_head_clusman_data["secondary_of"] = "243-284"
     
 elif hostname == "head3a.frank.sam.pitt.edu":
     partner = "head3b.frank.sam.pitt.edu"
     
+    new_head_clusman_data["compute_node_class"] = "AMD Interlagos"
+    new_head_clusman_data["primary_of"] = "325-350"
+    new_head_clusman_data["secondary_of"] = "351-378"
+    
 elif hostname == "head3b.frank.sam.pitt.edu":
     partner = "head3a.frank.sam.pitt.edu"
     
+    new_head_clusman_data["compute_node_class"] = "AMD Interlagos"
+    new_head_clusman_data["primary_of"] = "351-378"
+    new_head_clusman_data["secondary_of"] = "325-350"
+    
+
+    
+# Report that we've now checked ourself
+new_head_clusman_data["last_check"] = int(time.time())
     
     
     
+# Update the head_clusman collection
+db.head_clusman.update(
+    {
+        "_id" : hostname.split(".")[0]
+    },
+    {
+        "$set" : new_head_clusman_data
+    },
+    upsert = True,
+)
+
+del(new_head_clusman_data)
+
+
+
+
 
 #
 # Get the output of beostat and check each node
 #
 try:
-    bpstat = subprocess.Popen([bpstat, "-l", nodes], stdout=subprocess.PIPE, shell=False)
+    bpstat_proc = subprocess.Popen([bpstat, "-l", nodes], stdout=subprocess.PIPE, shell=False)
     
-    status = bpstat.wait()
+    status = bpstat_proc.wait()
     
     if status != 0:
         raise Exception("Non-zero exit status: " + str(status) + "\n")
     
-    bpstat_out = bpstat.communicate()[0]
+    bpstat_out = bpstat_proc.communicate()[0]
     
 except Exception as err:
     sys.stderr.write("Call to bpstat failed: " + str(err))
@@ -215,6 +264,7 @@ except Exception as err:
     
 
 # Loop through bpstat's output for each node
+new_compute_data = {}
 for line in bpstat_out.split(os.linesep):
     # Skip the header
     match_header = re.match("^Node", line)
@@ -225,16 +275,62 @@ for line in bpstat_out.split(os.linesep):
         
     # Get the node number and state
     (node, status) = line.split()[0:3:2]
-
+    node = int(node)
     
-    # Add a row for the node if one does not exist.
-    if cursor.execute("SELECT node_id FROM compute WHERE node_id=" + node) == 0:
-        cursor.execute("INSERT INTO compute (node_id) VALUES (" + node + ")")
+    
+    # Get the node's details we care about
+    node_db_info = db.compute.find_one(
+        {
+            "_id" : node
+        },
+        {
+            "last_check" : 1,
+            "state" : 1,
+            "state_time" : 1,
+            "rack" : 1,
+            "_id" : 0,
+        }
+    )
+    
+    # Catch things that didn't exist in the document
+    if node_db_info is None:
+        node_db_info = {}
+        
+        node_db_info["last_check"] = None
+        node_db_info["state"] = None
+        node_db_info["state_time"] = None
+        node_db_info["rack"] = None
+        
+    else:
+        try:
+            garbage = node_db_info["last_check"]
+            
+        except KeyError:
+            node_db_info["last_check"] = None
+            
+        try:
+            garbage = node_db_info["state"]
+            
+        except KeyError:
+            node_db_info["state"] = None
+            
+        try:
+            garbage = node_db_info["state_time"]
+            
+        except KeyError:
+            node_db_info["state_time"] = None
+            
+        try:
+            garbage = node_db_info["rack"]
+            
+        except KeyError:
+            node_db_info["rack"] = None
 
         
-    sys.stdout.write("Node: " + node + "\n")
+    sys.stdout.write("Node: " + str(node) + "\n")
     
     state = ""
+    new_compute_data = {}
     
     
     if status == "up":
@@ -242,10 +338,7 @@ for line in bpstat_out.split(os.linesep):
         
         num_state["up"] += 1
         
-        # Get the last state and see if it matches the current state
-        last_state = compute_query("state", node)
-        
-        if last_state == "up":
+        if node_db_info["state"] == "up":
             sys.stdout.write("State: up - known\n")
             
         else:    
@@ -264,7 +357,7 @@ for line in bpstat_out.split(os.linesep):
                 stdout = channel.makefile("rb", 1024)
                 stderr = channel.makefile_stderr("rb", 1024)
                 
-                channel.exec_command(pbsnodes + " -c n" + node + "; exit $?")
+                channel.exec_command(pbsnodes + " -c n" + str(node) + "; exit $?")
                 
                 # Check for errors
                 err = stderr.read()
@@ -286,19 +379,16 @@ for line in bpstat_out.split(os.linesep):
                 ssh.close()
                 
             except Exception, err:
-                sys.stderr.write("Failed to online node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n")
+                sys.stderr.write(red + "Failed to online node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n" + endcolor)
             
-            cursor.execute("UPDATE compute SET state='up', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
-        
+            new_compute_data["state"] = "up"
+            
+            new_compute_data["state_time"] = int(time.time())
+            
         
     elif status == "down": # Really could be orphan or partnered instead of down
-        
-        # Get the last state and times
-        last_state = compute_query("state", node)
-        last_check = compute_query("last_check", node)
-        state_time = compute_query("state_time", node)
-        
-        if last_check is None: last_check = 0
+        if node_db_info["last_check"] is None:
+            node_db_info["last_check"] = 0
 
         
         # If our partner thinks the node is up, boot or error consider the node "partnered"
@@ -319,7 +409,7 @@ for line in bpstat_out.split(os.linesep):
             stdout = channel.makefile("rb", 1024)
             stderr = channel.makefile_stderr("rb", 1024)
             
-            channel.exec_command(bpstat + node + "; exit $?")
+            channel.exec_command(bpstat + " " + str(node) + "; exit $?")
             
             err = stderr.read()
             stderr.close()
@@ -358,7 +448,7 @@ for line in bpstat_out.split(os.linesep):
             ssh.close()
             
         except Exception, err:
-            sys.stderr.write("Failed to find partner's status: " + str(err) + "\n")
+            sys.stderr.write(red + "Failed to find partner's status: " + str(err) + endcolor + "\n")
         
             found_partner_status = False
         
@@ -372,21 +462,21 @@ for line in bpstat_out.split(os.linesep):
             
         
         # If the node checked in within the last 10 minutes, consider it an orphan
-        elif last_check > (int(time.time()) - 600):
+        elif node_db_info["last_check"] > (int(time.time()) - 600):
             state = "orphan"
             
             num_state["orphan"] += 1
             
-            if last_state == "orphan":
-                sys.stdout.write("State: orphan - known\n")
+            if node_db_info["state"] == "orphan":
+                sys.stdout.write(red + "State: orphan - known\n" + endcolor)
                 
                 # If the node has been an orphan more than 7 days, throw an alert
-                if (int(time.time()) - int(state_time)) >= 604800:
-                    syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " is not up, state: orphan (beyond 7 day limit)")
+                if (int(time.time()) - node_db_info["state_time"]) >= 604800:
+                    syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " is not up, state: orphan (beyond 7 day limit)")
                 
                 
             else:
-                sys.stdout.write("State: orphan - new\n")
+                sys.stdout.write(red + "State: orphan - new\n" + endcolor)
                 
                 try:
                     ssh = paramiko.SSHClient()
@@ -401,7 +491,7 @@ for line in bpstat_out.split(os.linesep):
                     stdout = channel.makefile("rb", 1024)
                     stderr = channel.makefile_stderr("rb", 1024)
                     
-                    channel.exec_command(pbsnodes + " -o n" + node + "; exit $?")
+                    channel.exec_command(pbsnodes + " -o n" + str(node) + "; exit $?")
                     
                     # Check for errors
                     err = stderr.read()
@@ -423,10 +513,11 @@ for line in bpstat_out.split(os.linesep):
                     ssh.close()
                         
                 except Exception, err:
-                    sys.stderr.write("Failed to offline node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n")
+                    sys.stderr.write(red + "Failed to offline node with `pbsnodes` on " + clusman_host + ": " + str(err) + endcolor + "\n")
                 
-                cursor.execute("UPDATE compute SET state='orphan', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
-        
+                new_compute_data["state"] = "orphan"
+                new_compute_data["state_time"] = int(time.time())
+                    
         
         # The node has not checked in within the last 10 minutes, it's down
         else:
@@ -434,22 +525,27 @@ for line in bpstat_out.split(os.linesep):
             
             num_state["down"] += 1
             
-            if last_state == "down":
-                sys.stdout.write("State: down - known\n")
+            if node_db_info["state"] == "down":
+                sys.stdout.write(red + "State: down - known\n" + endcolor)
                 
                 ## TODO: Add IPMI's 'chassis power cycle'
                 
                 ## If the node has been down for more than 30 minutes, throw an alert
-                if (int(time.time()) - int(state_time)) >= 1800:
-                   syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " is not up, state: down")
+                if (int(time.time()) - node_db_info["state_time"]) >= (60 * 30):
+                    if node_db_info["rack"] is not None:
+                        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " is not up, state: down, rack: " + node_db_info["rack"])
+                        
+                    else:
+                        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " is not up, state: down")
                    
                 
             else:
-                sys.stdout.write("State: down - new\n")
+                sys.stdout.write(red + "State: down - new\n" + endcolor)
                 
-                syslog.syslog(syslog.LOG_WARNING, "Node " + node + " is not up, state: down")
+                syslog.syslog(syslog.LOG_WARNING, "Node " + str(node) + " is not up, state: down")
                 
-                cursor.execute("UPDATE compute SET state='down', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
+                new_compute_data["state"] = "down"
+                new_compute_data["state_time"] = int(time.time())
                 
             
     elif status == "boot":
@@ -457,22 +553,18 @@ for line in bpstat_out.split(os.linesep):
         
         num_state["boot"] += 1
         
-        # Get the last state and see if it matches the current state
-        last_state = compute_query("state", node)
-        
-        if last_state == "boot":
+        if node_db_info["state"] == "boot":
             sys.stdout.write("State: boot - known\n")
             
         else:
             sys.stdout.write("State: boot - new\n")
             
-            cursor.execute("UPDATE compute SET state='boot', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
+            new_compute_data["state"] = "boot"
+            new_compute_data["state_time"] = int(time.time())
             
-        # If the node has been in boot state for more than 120 minutes, log an alert
-        time_diff = int(time.time()) - int(compute_query("state_time", node))
-        
-        if time_diff >= 7200:
-            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " is not up, state: boot")
+        # If the node has been in boot state for more than 2 hours, log an alert
+        if int(time.time()) - node_db_info["state_time"] >= (60 * 60 * 2):
+            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " is not up, state: boot")
         
         
     elif status == "error":
@@ -480,18 +572,16 @@ for line in bpstat_out.split(os.linesep):
         
         num_state["error"] += 1
         
-        # Get the last state and see if it matches the current state
-        last_state = compute_query("state", node)
-        
-        if last_state == "error":
-            sys.stdout.write("State: error - known\n")
+        if node_db_info["state"] == "error":
+            sys.stdout.write(red + "State: error - known\n" + endcolor)
             
         else:
-            sys.stdout.write("State: error - new\n")
+            sys.stdout.write(red + "State: error - new\n" + endcolor)
             
-            cursor.execute("UPDATE compute SET state='error', state_time=" + str(int(time.time())) + " WHERE node_id=" + node)
+            new_compute_data["state"] = "error"
+            new_compute_data["state_time"] = int(time.time())
             
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + node + " is not up, state: error")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " is not up, state: error")
 
         
     
@@ -512,7 +602,7 @@ for line in bpstat_out.split(os.linesep):
             stdout = channel.makefile("rb", 1024)
             stderr = channel.makefile_stderr("rb", 1024)
             
-            channel.exec_command(pbsnodes + " -q n" + node + "; exit $?")
+            channel.exec_command(pbsnodes + " -q n" + str(node) + "; exit $?")
             
             # Check for errors
             err = stderr.read()
@@ -536,24 +626,24 @@ for line in bpstat_out.split(os.linesep):
                 if not match:
                     continue
                 
-                pbs_state = line.split()[2]
+                pbs = line.split()[2]
                 
-                if pbs_state == "offline":
-                    sys.stdout.write("PBS: Offline\n")
+                if pbs == "offline":
+                    sys.stdout.write(red + "PBS: Offline" + endcolor + "\n")
                     
                     num_state["pbs_offline"] += 1
                     
-                    cursor.execute("UPDATE compute SET pbs_state='offline' WHERE node_id=" + node)
+                    new_compute_data["pbs"] = False
                     
-                elif pbs_state == "down":
-                    sys.stdout.write("PBS: Down\n")
+                elif pbs == "down":
+                    sys.stdout.write(red + "PBS: Down" + endcolor + "\n")
                     
-                    cursor.execute("UPDATE compute SET pbs_state='down' WHERE node_id=" + node)
+                    new_compute_data["pbs"] = False
                     
                 else:
                     sys.stdout.write("PBS: OK\n")
                     
-                    cursor.execute("UPDATE compute SET pbs_state='ok' WHERE node_id=" + node)
+                    new_compute_data["pbs"] = True
                     
             stdout.close()
             
@@ -564,31 +654,42 @@ for line in bpstat_out.split(os.linesep):
         except Exception, err:
             sys.stderr.write("Failed to check PBS state node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n")
 
-            syslog.syslog(syslog.LOG_WARNING, "Failed to check PBS state node with `pbsnodes` on " + clusman_host + " for node: " + node)
+            syslog.syslog(syslog.LOG_WARNING, "Failed to check PBS state node with `pbsnodes` on " + clusman_host + " for node: " + str(node))
             
-            cursor.execute("UPDATE compute SET pbs_state=NULL WHERE node_id=" + node)
-    
+            new_compute_data["pbs"] = False
+            
     
     
     #
     # Verify that the node is still checking in if it is up
     #    
     if state == "up":
-        last_check = compute_query("last_check", node)
-        
-        if last_check is None:
-            sys.stderr.write("Node " + str(node) + " last check in time is NULL\n")
+        if node_db_info["last_check"] is None:
+            sys.stderr.write(red + "Node " + str(node) + " last check in time is NULL" + endcolor + "\n")
         
         else:
-            checkin_seconds_diff = int(time.time()) - int(last_check)
+            checkin_seconds_diff = int(time.time()) - node_db_info["last_check"]
         
-            if checkin_seconds_diff >= 3600: # 1 hour
-                sys.stderr.write("Node " + str(node) + " last check in time is stale (last checked in " + str(checkin_seconds_diff) + " seconds ago)\n")
+            if checkin_seconds_diff >= 60 * 30:
+                sys.stderr.write(red + "Node " + str(node) + " last check in time is stale (last checked in " + str(checkin_seconds_diff) + " seconds ago)" + endcolor + "\n")
             
                 syslog.syslog(syslog.LOG_WARNING, "Node " + str(node) + " last check in time is stale (last checked in " + str(checkin_seconds_diff) + " seconds ago)")
     
     
     
+    # Update the compute collection
+    db.compute.update(
+        {
+            "_id" : node
+        },
+        {
+            "$set" : new_compute_data
+        },
+        upsert = True,
+    )
+    
+ 
+ 
     sys.stdout.write("\n")
     
     
@@ -596,7 +697,7 @@ for line in bpstat_out.split(os.linesep):
 # Check if we have too many nodes not up
 
 if num_state["down"] >= 10:
-    sys.stdout.write("WARNING: " + str(num_state["down"]) + " nodes in state 'down'!\n")
+    sys.stdout.write(red + "WARNING: " + str(num_state["down"]) + " nodes in state 'down'!" + endcolor + "\n")
     
     syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-ALERT: 10 or more nodes in state 'down'")
     
@@ -605,7 +706,7 @@ elif num_state["down"] > 0:
     
 
 if num_state["orphan"] >= 10:
-    sys.stdout.write("WARNING: " + str(num_state["orphan"]) + " nodes in state 'orphan'!\n")
+    sys.stdout.write(red + "WARNING: " + str(num_state["orphan"]) + " nodes in state 'orphan'!" + endcolor + "\n")
     
     syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-ALERT: 10 or more nodes in state 'orphan'")
     
@@ -614,7 +715,7 @@ elif num_state["orphan"] > 0:
     
     
 if num_state["error"] >= 10:
-    sys.stdout.write("WARNING: " + str(num_state["error"]) + " nodes in state 'error'!\n")
+    sys.stdout.write(red + "WARNING: " + str(num_state["error"]) + " nodes in state 'error'!" + endcolor + "\n")
     
     syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-ALERT: 10 or more nodes in state 'error'")
     
@@ -623,7 +724,7 @@ elif num_state["error"] > 0:
     
     
 if num_state["pbs_offline"] >= 10:
-    sys.stdout.write("WARNING: " + str(num_state["pbs_offline"]) + " nodes PBS state 'offline'!\n")
+    sys.stdout.write(red + "WARNING: " + str(num_state["pbs_offline"]) + " nodes PBS state 'offline'!" + endcolor + "\n")
     
     syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-ALERT: 10 or more nodes with PBS state 'offline'")
     
@@ -639,4 +740,3 @@ sys.stdout.write(str(num_state["up"]) + " nodes in state 'up'\n")
 
 # Close the DB, we're done with it
 syslog.closelog()
-db.close()

@@ -2,8 +2,8 @@
  * Description: Beomon status viewer's CSS
  * Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
  * Derived from unlicensed work by Adam Cerini of the University of Pittsburgh
- * Version: 2
- * Last change: Split into two table designations
+ * Version: 2.1
+ * Last change: Removed unused code
 */
 
 
@@ -12,7 +12,6 @@
 
 /* General */
 tr:nth-child(odd) {
-    background: blue;
     background: gainsboro;
 }
 
@@ -35,7 +34,7 @@ span.dropt:hover {
 }
 
 span.dropt span {
-    position: absolute; left: -9999px;
+    position: absolute; left: -99999px;
     margin: 20px 0 0 0px; padding: 3px 3px 3px 3px;
     border-style: solid; border-color: black; border-width: 1px; z-index: 6;
 }
@@ -43,10 +42,6 @@ span.dropt span {
 span.dropt:hover span {
     left: 2%; background: whitesmoke;
     width: 350px;
-}
-
-td {
-    position: relative;
 }
 
 
@@ -78,7 +73,6 @@ table.compute_nodes td {
 
 table.compute_nodes th {
     background: #bcbfc2;
-    text-align: left;
 }
 
 table.compute_nodes tr:hover td {
@@ -119,7 +113,6 @@ table.summary td {
 
 table.summary th {
     background: #bcbfc2;
-    text-align: left;
 }
 
 table.summary caption {

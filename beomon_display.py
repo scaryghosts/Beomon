@@ -1,9 +1,8 @@
-#!/usr/bin/env python
+#!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2
-# Last change: Removed chong mount points, added storage, head and compute summary/health tables, 
-# switched compute node SQL table name to 'compute'
+# Version: 3
+# Last change: Switched from MySQL to MongoDB, added IPs and rack ID
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -14,16 +13,12 @@
 
 
 
-import sys
-sys.path.append("/opt/sam/beomon/modules/")
-import os, re, MySQLdb, time, locale, signal, subprocess
+import sys, os, re, pymongo, time, locale, signal, subprocess, cgitb
 from optparse import OptionParser
 
 
 
-mysql_host = "clusman.frank.sam.pitt.edu"
-#mysql_host = "headnode1.frank.sam.pitt.edu"
-nodes = ""
+mongo_host = "clusman.frank.sam.pitt.edu"
 
 
 
@@ -36,30 +31,6 @@ parser = OptionParser("%prog [options]\n" +
 
 
 
-# Query MySQL for a given column of a given node
-def compute_query(column, node):
-    cursor.execute("SELECT " + column + " FROM compute WHERE node_id=" + node)
-        
-    results = cursor.fetchone()
-        
-    if results is None:
-        return False
-        
-    else:       
-        return results[0]
-    
-    
-def cluster_health_query(column, node):
-    cursor.execute("SELECT " + column + " FROM cluster_health WHERE node_id='" + node + "'")
-        
-    results = cursor.fetchone()
-    
-    if results is None:
-        return False
-        
-    else:       
-        return results[0]
-            
             
             
 # Prepare for subprocess timeouts
@@ -91,6 +62,8 @@ def filesystem_info(filesystem):
         return line.split()
 
             
+            
+            
 
 # Get the DB password
 dbpasshandle = open("/opt/sam/beomon/beomonpass.txt", "r")
@@ -101,16 +74,26 @@ dbpasshandle.close()
     
 # Open a DB connection
 try:
-    db = MySQLdb.connect(
-        host=mysql_host, user="beomon",
-        passwd=dbpass, db="beomon"
-    )
-                                             
-    cursor = db.cursor()
+    mongo_client = pymongo.MongoClient(mongo_host)
+
+    db = mongo_client.beomon
+    
+    db.authenticate("beomon", dbpass)
+    
+    del(dbpass)
     
 except Exception as err:
     sys.stderr.write("Failed to connect to the Beomon database: " + str(err) + "\n")
     sys.exit(1)
+    
+    
+    
+    
+    
+# Enable debugging
+cgitb.enable()
+    
+    
     
 
 
@@ -119,7 +102,7 @@ sys.stdout.write("""Content-type: text/html
 
 <html>
 <head>
-<title>Frank Compute Node Status</title>
+<title>Frank Cluster Status</title>
 <link href="beomon-stuff/style.css" media="all" rel="stylesheet" type="text/css">
 </head>
 <body>
@@ -146,19 +129,24 @@ sys.stdout.write("""
 </center>
     
 <table id="summary" summary="Cluster Summary" width="65%" class="summary">
-    <col width="15%">
-    <col width="8%">
+    <col width="15%">  <!--Compute summary-->
     <col width="10%">
-    <col width="15%">
-    <col width="8%">
+    
+    <col width="9%">  <!--Hidden column-->
+    
+    <col width="9%">  <!--Storage summary-->
     <col width="10%">
-    <col width="15%">
+    <col width="4%">
+    
+    <col width="9%">  <!--Hidden column-->
+    
+    <col width="15%">  <!--Master summary-->
     <col width="8%">
     <thead>
         <tr>
             <th colspan="2">Compute Summary</th>
             <th style=\"background-color:#A4A4A4;\"></th>
-            <th colspan="2">Storage Summary</th>
+            <th colspan="3">Storage Summary</th>
             <th style=\"background-color:#A4A4A4;\"></th>
             <th colspan="2">Master Summary</th>
         </tr>
@@ -168,359 +156,475 @@ sys.stdout.write("""
 
 
 
-cluster_summary = {
-    "nodes_total" : 0,
-    "nodes_up" : 0,
-    "nodes_down_error" : 0,
-    "nodes_boot" : 0,
-    "nodes_orphaned" : 0,
-    "cpu_total" : 0,
-    "ram_total" : 0.0,
-    "scratch_total" : 0.0,
+
+
+locale.setlocale(locale.LC_ALL, 'en_US')
+storage_totals = {
+    "size" : 0,
+    "used" : 0,
+    "free" : 0,
 }
 
 
 
-# Loop through each node in the DB
-cursor.execute("SELECT state, cpu_num, ram, scratch_size FROM compute")
 
-for row in sorted(cursor.fetchall()):
-    [state, cpu_num, ram, scratch_size] = row
+
+# Print the storage detail columns
+def storage_detail_cols(mount_point):
+    if os.path.ismount(mount_point):
+        fs_info = filesystem_info(mount_point)
+        size_tb = round(float(fs_info[1]) / 1024 / 1024 / 1024, 2)
+        used_tb = round(float(fs_info[2]) / 1024 / 1024 / 1024, 2)
+        free_tb = round(float(fs_info[3]) / 1024 / 1024 / 1024, 2)
+        percent_used = fs_info[4]
+        
+        storage_totals["size"] += size_tb
+        storage_totals["used"] += used_tb
+        storage_totals["free"] += free_tb
+
+        sys.stdout.write("<td>" + mount_point + "</td>\n")
+        
+        sys.stdout.write("<td>" + str(size_tb) + " TB</td>\n")
+        
+        sys.stdout.write("<td style=\"text-align:center;\">" + percent_used + "</td>\n")
+        
+    else:
+        sys.stdout.write("<td>" + mount_point + "</td>\n")
+        sys.stdout.write("<td style=\"color:red;\">Unknown</td></td>\n")
+        sys.stdout.write("<td style=\"color:red;\">Unknown</td></td>\n")
+
+
+
+
     
-    cluster_summary["nodes_total"] += 1
-    
-    if state is not None:
-        if state == "up":
-            cluster_summary["nodes_up"] += 1
-
-        elif state == "down" or state == "error":
-            cluster_summary["nodes_down_error"] += 1
-
-        elif state == "boot":
-            cluster_summary["nodes_boot"] += 1
-            
-        elif state == "orphaned":
-            cluster_summary["nodes_orphaned"] += 1
-
-    if cpu_num is not None:
-        cluster_summary["cpu_total"] += cpu_num
-        
-    if ram is not None:
-        cluster_summary["ram_total"] += float(ram)
-        
-    if scratch_size is not None:
-        cluster_summary["scratch_total"] += float(scratch_size)
-
-
-        
-#locale.setlocale(locale.LC_ALL, '')
+#
 # Row 1
+#
+
+# Compute Summary
 sys.stdout.write("<tr><td>Nodes Total </td>\n")
-sys.stdout.write("<td>" + str(cluster_summary["nodes_total"]) + "</td>\n")
+sys.stdout.write("<td>" + str(db.compute.count()) + "</td>\n")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
 
-if os.path.ismount("/home"):
-    fs_info = filesystem_info("/home")
-    size_tb = str(round(float(fs_info[1]) / 1024 / 1024 / 1024, 2))
-    used_tb = str(round(float(fs_info[2]) / 1024 / 1024 / 1024, 2))
-    free_tb = str(round(float(fs_info[3]) / 1024 / 1024 / 1024, 2))
-    percent_used = fs_info[4]
 
-    sys.stdout.write("<td><span align='left' class='dropt'>/home<span>\n")
-    sys.stdout.write("Size: " + size_tb + " TB<br>\nUsed: " + used_tb + " TB<br>\nFree: " + free_tb + " TB<br>\n</span></span></td>\n")
-    
-    sys.stdout.write("<td>" + percent_used + " used</td>\n")
-    
-else:
-    sys.stdout.write("<td>/home </td>\n")
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td>\n")
+# Storage Summary
+sys.stdout.write("<td style=\"text-align:center;font-weight:bold;background-color:silver\">Mount</td>\n")
+sys.stdout.write("<td style=\"text-align:center;font-weight:bold;background-color:silver\">Size</td>\n")
+sys.stdout.write("<td style=\"text-align:center;font-weight:bold;background-color:silver\">% Used</td>\n")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
 
-sys.stdout.write("<td><span align='left' class='dropt'>Head0a<span>\n")
-sys.stdout.write("Original Frank and Fermi Penguin<br>\nPrimary: 0-88<br>\nSecondary: 89-176<br>\n")
-last_check = cluster_health_query("last_check", "head0a")
-sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_check)) + "</span></span></td>\n")
 
-cursor.execute("SELECT beoserv, bpmaster, recvstats, kickbackdaemon FROM cluster_health WHERE node_id='head0a'")
-results = cursor.fetchone()
-if results is None:
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td></tr>\n\n")
-    
-elif results == (1, 1, 1, 1):
-    sys.stdout.write("<td>OK</td></tr>\n\n")
+# Master Summary
+sys.stdout.write("<td style=\"\"><span class='dropt'>Head0a<span>\n")
+master_info = db.head_clusman.find_one({"_id" : "head0a"})
+
+if master_info is None:
+    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
-    sys.stdout.write("<td><span style='color:red'>Down</span></td></tr>\n\n")
+    sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
+    sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
+
+if master_info is not None:
+    if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
+    master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
+        sys.stdout.write("<td>ok</td></tr>\n\n")
+    
+    else:
+        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
 
     
 
+#
 # Row 2
+#
+
+# Compute Summary
 sys.stdout.write("<tr><td>Nodes Up </td>\n")
-sys.stdout.write("<td>" + str(cluster_summary["nodes_up"]) + "</td>\n")
+sys.stdout.write("<td>" + str(db.compute.find({ "state" : "up" }).count()) + "</td>\n")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
-if os.path.ismount("/home1"):
-    fs_info = filesystem_info("/home1")
-    size_tb = str(round(float(fs_info[1]) / 1024 / 1024 / 1024, 2))
-    used_tb = str(round(float(fs_info[2]) / 1024 / 1024 / 1024, 2))
-    free_tb = str(round(float(fs_info[3]) / 1024 / 1024 / 1024, 2))
-    percent_used = fs_info[4]
 
-    sys.stdout.write("<td><span align='left' class='dropt'>/home1<span>\n")
-    sys.stdout.write("Size: " + size_tb + " TB<br>\nUsed: " + used_tb + " TB<br>\nFree: " + free_tb + " TB<br>\n</span></span></td>\n")
-    
-    sys.stdout.write("<td>" + percent_used + " used</td>\n")
-    
-else:
-    sys.stdout.write("<td>/home1</td>\n")
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td>\n")
+# Storage Summary
+storage_detail_cols("/home")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
 
-sys.stdout.write("<td><span align='left' class='dropt'>Head0b <span>\n")
-sys.stdout.write("Original Frank and Fermi Penguin<br>\nPrimary: 89-176<br>\nSecondary: 1-88<br>\n")
-last_check = cluster_health_query("last_check", "head0b")
-sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_check)) + "</span></span></td>\n")
 
-cursor.execute("SELECT beoserv, bpmaster, recvstats, kickbackdaemon FROM cluster_health WHERE node_id='head0b'")
-results = cursor.fetchone()
-if results is None:
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td></tr>\n\n")
-    
-elif results == (1, 1, 1, 1):
-    sys.stdout.write("<td>OK</td></tr>\n\n")
+# Master Summary
+sys.stdout.write("<td><span class='dropt'>Head0b<span>\n")
+master_info = db.head_clusman.find_one({"_id" : "head0b"})
+
+if master_info is None:
+    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
-    sys.stdout.write("<td><span style='color:red'>Down</span></td></tr>\n\n")
+    sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
+    sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
+
+if master_info is not None:
+    if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
+    master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
+        sys.stdout.write("<td>ok</td></tr>\n\n")
+        
+    else:
+        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
 
 
-    
+
+#
 # Row 3
-sys.stdout.write("<tr><td>Nodes Down/Error </td>\n")
-sys.stdout.write("<td>" + str(cluster_summary["nodes_down_error"]) + "</td>\n")
+#
+
+# Compute Summary
+sys.stdout.write("<tr><td>Nodes Down </td>\n")
+num_node_docs_down = db.compute.find({ "state" : "down" }).count()
+if num_node_docs_down == 0:
+    sys.stdout.write("<td>0</td>\n")
+else:
+    downs = list()
+    
+    for node_doc in db.compute.find({ "state" : "down" }, { "_id" : 1 }):
+        downs.append(node_doc["_id"])
+    
+    sys.stdout.write("<td><span style='color:red' class='dropt'>" + str(num_node_docs_down) + \
+    "<span>" + str(sorted(downs)) + "</span></span></td>\n")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
-if os.path.ismount("/home2"):
-    fs_info = filesystem_info("/home2")
-    size_tb = str(round(float(fs_info[1]) / 1024 / 1024 / 1024, 2))
-    used_tb = str(round(float(fs_info[2]) / 1024 / 1024 / 1024, 2))
-    free_tb = str(round(float(fs_info[3]) / 1024 / 1024 / 1024, 2))
-    percent_used = fs_info[4]
 
-    sys.stdout.write("<td><span align='left' class='dropt'>/home2<span>\n")
-    sys.stdout.write("Size: " + size_tb + " TB<br>\nUsed: " + used_tb + " TB<br>\nFree: " + free_tb + " TB<br>\n</span></span></td>\n")
-    
-    sys.stdout.write("<td>" + percent_used + " used</td>\n")
-    
-else:
-    sys.stdout.write("<td>/home2</td>\n")
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td>\n")
+# Storage Summary
+storage_detail_cols("/home1")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
 
-sys.stdout.write("<td><span align='left' class='dropt'>Head1a <span>\n")
-sys.stdout.write("IBM<br>\nPrimary: 177-209<br>\nSecondary: 210-241<br>\n")
-last_check = cluster_health_query("last_check", "head1a")
-sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_check)) + "</span></span></td>\n")
 
-cursor.execute("SELECT beoserv, bpmaster, recvstats, kickbackdaemon FROM cluster_health WHERE node_id='head1a'")
-results = cursor.fetchone()
-if results is None:
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td></tr>\n\n")
-    
-elif results == (1, 1, 1, 1):
-    sys.stdout.write("<td>OK</td></tr>\n\n")
+# Master Summary
+sys.stdout.write("<td><span class='dropt'>Head1a<span>\n")
+master_info = db.head_clusman.find_one({"_id" : "head1a"})
+
+if master_info is None:
+    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
-    sys.stdout.write("<td><span style='color:red'>Down</span></td></tr>\n\n")
+    sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
+    sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
+
+if master_info is not None:
+    if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
+    master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
+        sys.stdout.write("<td>ok</td></tr>\n\n")
+        
+    else:
+        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
 
 
-    
+
+#
 # Row 4
-sys.stdout.write("<tr><td>Nodes Booting </td>\n")
-sys.stdout.write("<td>" + str(cluster_summary["nodes_boot"]) + "</td>\n")
+#
+
+# Compute Summary
+sys.stdout.write("<tr><td>Nodes Error</td>\n")
+num_node_docs_error = db.compute.find({ "state" : "error" }).count()
+if num_node_docs_error == 0:
+    sys.stdout.write("<td>0</td>\n")
+else:
+    erroreds = list()
+    
+    for node_doc in db.compute.find({ "state" : "error" }, { "_id" : 1 }):
+        erroreds.append(node_doc["_id"])
+    
+    sys.stdout.write("<td><span style='color:red' class='dropt'>" + str(num_node_docs_error) + \
+    "<span>" + str(sorted(erroreds)) + "</span></span></td>\n")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
-if os.path.ismount("/gscratch1"):
-    fs_info = filesystem_info("/gscratch1")
-    size_tb = str(round(float(fs_info[1]) / 1024 / 1024 / 1024, 2))
-    used_tb = str(round(float(fs_info[2]) / 1024 / 1024 / 1024, 2))
-    free_tb = str(round(float(fs_info[3]) / 1024 / 1024 / 1024, 2))
-    percent_used = fs_info[4]
 
-    sys.stdout.write("<td><span align='left' class='dropt'>/gscratch1<span>\n")
-    sys.stdout.write("Size: " + size_tb + " TB<br>\nUsed: " + used_tb + " TB<br>\nFree: " + free_tb + " TB<br>\n</span></span></td>\n")
-    
-    sys.stdout.write("<td>" + percent_used + " used</td>\n")
-    
-else:
-    sys.stdout.write("<td>/gscratch1</td>\n")
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td>\n")
+# Storage Summary
+storage_detail_cols("/home2")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
 
-sys.stdout.write("<td><span align='left' class='dropt'>Head1b <span>\n")
-sys.stdout.write("IBM<br>\nPrimary: 210-241<br>\nSecondary: 177-209<br>\n")
-last_check = cluster_health_query("last_check", "head1b")
-sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_check)) + "</span></span></td>\n")
 
-cursor.execute("SELECT beoserv, bpmaster, recvstats, kickbackdaemon FROM cluster_health WHERE node_id='head1b'")
-results = cursor.fetchone()
-if results is None:
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td></tr>\n\n")
-    
-elif results == (1, 1, 1, 1):
-    sys.stdout.write("<td>OK</td></tr>\n\n")
+# Master Summary
+sys.stdout.write("<td><span class='dropt'>Head1b<span>\n")
+master_info = db.head_clusman.find_one({"_id" : "head1b"})
+
+if master_info is None:
+    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
-    sys.stdout.write("<td><span style='color:red'>Down</span></td></tr>\n\n")
+    sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
+    sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
+
+if master_info is not None:
+    if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
+    master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
+        sys.stdout.write("<td>ok</td></tr>\n\n")
+        
+    else:
+        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
 
 
     
+#
 # Row 5
-sys.stdout.write("<tr><td>Nodes Orphaned </td>\n")
-sys.stdout.write("<td>" + str(cluster_summary["nodes_orphaned"]) + "</td>\n")
+#
+
+# Compute Summary
+sys.stdout.write("<tr><td>Nodes Booting </td>\n")
+num_node_docs_boot = db.compute.find({ "state" : "boot" }).count()
+if num_node_docs_boot == 0:
+    sys.stdout.write("<td>0</td>\n")
+    
+else:
+    bootings = list()
+    
+    for node_doc in db.compute.find({ "state" : "boot" }, { "_id" : 1 }):
+        bootings.append(node_doc["_id"])
+    
+    sys.stdout.write("<td><span style='color:red' class='dropt'>" + str(num_node_docs_boot) + \
+    "<span>" + str(sorted(bootings)) + "</span></span></td>\n")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
-if os.path.ismount("/pan"):
-    fs_info = filesystem_info("/pan")
-    size_tb = str(round(float(fs_info[1]) / 1024 / 1024 / 1024, 2))
-    used_tb = str(round(float(fs_info[2]) / 1024 / 1024 / 1024, 2))
-    free_tb = str(round(float(fs_info[3]) / 1024 / 1024 / 1024, 2))
-    percent_used = fs_info[4]
 
-    sys.stdout.write("<td><span align='left' class='dropt'>/pan<span>\n")
-    sys.stdout.write("Size: " + size_tb + " TB<br>\nUsed: " + used_tb + " TB<br>\nFree: " + free_tb + " TB<br>\n</span></span></td>\n")
-    
-    sys.stdout.write("<td>" + percent_used + " used</td>\n")
-    
-else:
-    sys.stdout.write("<td>/pan</td>\n")
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td>\n")
+# Storage Summary
+storage_detail_cols("/gscratch1")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
 
-sys.stdout.write("<td><span align='left' class='dropt'>Head2a <span>\n")
-sys.stdout.write("Sandybridge<br>\nPrimary: 242-284<br>\nSecondary: 285-324<br>\n")
-last_check = cluster_health_query("last_check", "head2a")
-sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_check)) + "</span></span></td>\n")
 
-cursor.execute("SELECT beoserv, bpmaster, recvstats, kickbackdaemon FROM cluster_health WHERE node_id='head2a'")
-results = cursor.fetchone()
-if results is None:
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td></tr>\n\n")
-    
-elif results == (1, 1, 1, 1):
-    sys.stdout.write("<td>OK</td></tr>\n\n")
+# Master Summary
+sys.stdout.write("<td><span class='dropt'>Head2a<span>\n")
+master_info = db.head_clusman.find_one({"_id" : "head2a"})
+
+if master_info is None:
+    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
-    sys.stdout.write("<td><span style='color:red'>Down</span></td></tr>\n\n")
+    sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
+    sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
+
+if master_info is not None:
+    if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
+    master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
+        sys.stdout.write("<td>ok</td></tr>\n\n")
+        
+    else:
+        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
 
 
     
+#
 # Row 6
-sys.stdout.write("<tr><td>Total CPUs </td>\n")
-sys.stdout.write("<td>" + locale.format('%d',cluster_summary["cpu_total"], 1) + "</td>\n")
+#
 
-sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
-
-if os.path.ismount("/data/sam"):
-    fs_info = filesystem_info("/data/sam")
-    size_tb = str(round(float(fs_info[1]) / 1024 / 1024 / 1024, 2))
-    used_tb = str(round(float(fs_info[2]) / 1024 / 1024 / 1024, 2))
-    free_tb = str(round(float(fs_info[3]) / 1024 / 1024 / 1024, 2))
-    percent_used = fs_info[4]
-
-    sys.stdout.write("<td><span align='left' class='dropt'>/data/sam<span>\n")
-    sys.stdout.write("Size: " + size_tb + " TB<br>\nUsed: " + used_tb + " TB<br>\nFree: " + free_tb + " TB<br>\n</span></span></td>\n")
-    
-    sys.stdout.write("<td>" + percent_used + " used</td>\n")
+# Compute Summary
+sys.stdout.write("<tr><td>Nodes Orphaned </td>\n")
+num_node_docs_orphan = db.compute.find({ "state" : "orphan" }).count()
+if num_node_docs_orphan == 0:
+    sys.stdout.write("<td>0</td>\n")
     
 else:
-    sys.stdout.write("<td>/data/sam</td>\n")
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td>\n")
+    orphans = list()
+    
+    for node_doc in db.compute.find({ "state" : "orphan" }, { "_id" : 1 }):
+        orphans.append(node_doc["_id"])
+    
+    sys.stdout.write("<td><span style='color:red' class='dropt'>" + str(num_node_docs_orphan) + \
+    "<span>" + str(sorted(orphans)) + "</span></span></td>\n")
+    
+sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
+
+
+# Storage Summary
+storage_detail_cols("/gscratch2")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
 
-sys.stdout.write("<td><span align='left' class='dropt'>Head2b <span>\n")
-sys.stdout.write("Sandybridge<br>\nPrimary: 285-324<br>\nSecondary: 242-284<br>\n")
-last_check = cluster_health_query("last_check", "head2b")
-sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_check)) + "</span></span></td>\n")
 
-cursor.execute("SELECT beoserv, bpmaster, recvstats, kickbackdaemon FROM cluster_health WHERE node_id='head2b'")
-results = cursor.fetchone()
-if results is None:
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td></tr>\n\n")
-    
-elif results == (1, 1, 1, 1):
-    sys.stdout.write("<td>OK</td></tr>\n\n")
+# Master Summary
+sys.stdout.write("<td><span class='dropt'>Head2b<span>\n")
+master_info = db.head_clusman.find_one({"_id" : "head2b"})
+
+if master_info is None:
+    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
-    sys.stdout.write("<td><span style='color:red'>Down</span></td></tr>\n\n")
+    sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
+    sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
+
+if master_info is not None:
+    if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
+    master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
+        sys.stdout.write("<td>ok</td></tr>\n\n")
+        
+    else:
+        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
 
 
     
+#
 # Row 7
-sys.stdout.write("<tr><td>Total RAM </td>\n")
-sys.stdout.write("<td>" + str(round(cluster_summary["ram_total"] / 1024, 2)) + " TB</td>\n")
+#
+
+# Compute Summary
+cpu_total = 0
+for node_doc in db.compute.find({}, { "cpu" : 1}):
+    try:
+        cpu_total += node_doc["cpu"]["cpu_num"]
+    
+    except KeyError:
+        pass
+
+sys.stdout.write("<tr><td>Total CPU Cores </td>\n")
+sys.stdout.write("<td>" + locale.format("%d", cpu_total, grouping=True) + "</td>\n")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
-sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
-sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
+
+# Storage Summary
+storage_detail_cols("/pan")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
 
-sys.stdout.write("<td><span align='left' class='dropt'>Head3a <span>\n")
-sys.stdout.write("Interlagos<br>\nPrimary: 325-350<br>\nSecondary: 351-378<br>\n")
-last_check = cluster_health_query("last_check", "head3a")
-sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_check)) + "</span></span></td>\n")
 
-cursor.execute("SELECT beoserv, bpmaster, recvstats, kickbackdaemon FROM cluster_health WHERE node_id='head3a'")
-results = cursor.fetchone()
-if results is None:
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td></tr>\n\n")
-    
-elif results == (1, 1, 1, 1):
-    sys.stdout.write("<td>OK</td></tr>\n\n")
+# Master Summary
+sys.stdout.write("<td><span class='dropt'>Head3a<span>\n")
+master_info = db.head_clusman.find_one({"_id" : "head3a"})
+
+if master_info is None:
+    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
-    sys.stdout.write("<td><span style='color:red'>Down</span></td></tr>\n\n")
+    sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
+    sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
+
+if master_info is not None:
+    if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
+    master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
+        sys.stdout.write("<td>ok</td></tr>\n\n")
+        
+    else:
+        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
 
 
     
+#
 # Row 8
-sys.stdout.write("<tr><td>Total /scratch</td>\n")
-sys.stdout.write("<td>" + str(round(cluster_summary["scratch_total"] / 1024, 2)) + " TB</td>\n")
+#
+
+# Compute Summary
+gpu_cores_total = 0
+for node_doc in db.compute.find({}, { "gpu" : 1 }):
+    try:
+        gpu_cores_total += node_doc["gpu"]["num_cores"]
+        
+    except KeyError:
+        pass
+        
+sys.stdout.write("<tr><td>Total GPU Cores:</td>\n")
+sys.stdout.write("<td>" + locale.format("%0.0f", gpu_cores_total, grouping=True) + "</td>\n")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
-sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
-sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
+
+# Storage Summary
+storage_detail_cols("/data/sam")
 
 sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
 
-sys.stdout.write("<td><span align='left' class='dropt'>Head3b <span>\n")
-sys.stdout.write("Interlagos<br>\nPrimary: 351-378<br>\nSecondary: 325-350<br>\n")
-last_check = cluster_health_query("last_check", "head3b")
-sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_check)) + "</span></span></td>\n")
 
-cursor.execute("SELECT beoserv, bpmaster, recvstats, kickbackdaemon FROM cluster_health WHERE node_id='head3b'")
-results = cursor.fetchone()
-if results is None:
-    sys.stdout.write("<td><span style='color:red'>Unknown</span></td></tr>\n\n")
-    
-elif results == (1, 1, 1, 1):
-    sys.stdout.write("<td>OK</td></tr>\n\n")
+# Master Summary
+sys.stdout.write("<td><span class='dropt'>Head3b<span>\n")
+master_info = db.head_clusman.find_one({"_id" : "head3b"})
+
+if master_info is None:
+    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
-    sys.stdout.write("<td><span style='color:red'>Down</span></td></tr>\n\n")
+    sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
+    sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
+
+if master_info is not None:
+    if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
+    master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
+        sys.stdout.write("<td>ok</td></tr>\n\n")
+        
+    else:
+        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
+        
+        
+        
+#
+# Row 9
+#
+
+# Compute Summary
+ram_total = 0
+for node_doc in db.compute.find({}, { "ram" : 1 }):
+    try:
+        ram_total += node_doc["ram"]
+        
+    except KeyError:
+        pass
+        
+sys.stdout.write("<tr><td>Total RAM </td>\n")
+sys.stdout.write("<td>" + locale.format("%0.2f", ram_total / float(1024), grouping=True) + " TB</td>\n")
+
+sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
+
+
+# Storage Summary
+sys.stdout.write("<td style=\"text-align:center\">Total:</td>\n")
+sys.stdout.write("<td>" + str(storage_totals["size"]) + " TB</td>\n")
+sys.stdout.write("<td style=\"text-align:center;\">" + str(int(round((storage_totals["used"] / storage_totals["size"]) * 100, 0))) + "%</td>\n")
+
+sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
+
+
+# Master Summary
+sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
+sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
+
+
+
+#
+# Row 10
+#
+
+# Compute Summary
+scratch_total = 0
+for node_doc in db.compute.find().sort("_id", 1):
+    try:
+        scratch_total += node_doc["scratch_size"]
+        
+    except KeyError:
+        pass
+        
+sys.stdout.write("<tr><td>Total /scratch</td>\n")
+sys.stdout.write("<td>" + locale.format("%0.2f", scratch_total / float(1024), grouping=True) + " TB</td>\n")
+
+sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
+
+
+# Storage Summary
+sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
+sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
+sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
+
+sys.stdout.write("<td style=\"background-color:#A4A4A4\"></td>\n")
+
+
+# Master Summary
+sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
+sys.stdout.write("<td style=\"background-color:#A4A4A4;\"></td>\n")
+
 
 
 sys.stdout.write("""
@@ -544,7 +648,6 @@ sys.stdout.write("""
             <th scope="col">PBS</th>
             <th scope="col">Moab</th>
             <th scope="col">Infiniband</th>
-            <th scope="col">/scratch</th>
             <th scope="col">/data/pkg</th>
             <th scope="col">/data/sam</th>
             <th scope="col">/gscratch1</th>
@@ -552,6 +655,7 @@ sys.stdout.write("""
             <th scope="col">/home1</th>
             <th scope="col">/home2</th>
             <th scope="col">/pan</th>
+            <th scope="col">/scratch</th>
         </tr>
     </thead>
     <tbody>
@@ -560,74 +664,84 @@ sys.stdout.write("""
 
 
 # Loop through each node in the DB
-cursor.execute("SELECT node_id FROM compute")
-
-nodes = cursor.fetchall()
-
-for node in nodes:
-    node = str(node[0])
+for node_doc in db.compute.find().sort("_id", 1):
+    #
+    # Node number
+    #
     
+    sys.stdout.write("<tr>\n<td><span class='dropt'>" + str(node_doc["_id"]) + "<span style=text-align:left>\n")
     
-    sys.stdout.write("<tr>\n<td><span align='left' class='dropt'>" + node + "<span>\n")
-    
-    
-    cpu_type = compute_query("cpu_type", node)
-    if cpu_type: sys.stdout.write("CPU Type: " + cpu_type + "<br>\n")
-    
-    
-    cpu_num = compute_query("cpu_num", node)
-    if cpu_num: sys.stdout.write("Number of CPUs: " + str(cpu_num) + "<br>\n")
-    
-    
-    ram = compute_query("ram", node)
-    if ram: sys.stdout.write("RAM: " + str(ram) + " GB<br>\n")
-    
-    
-    scratch_size = compute_query("scratch_size", node)
-    if scratch_size: sys.stdout.write("Scratch Size: " + str(scratch_size) + " GB<br>\n")
-    
-    
-    ib = compute_query("infiniband", node)
-    if ib == "n/a":
-        sys.stdout.write("Infiniband?: No" + "<br>\n")
+    # If it looks like we are missing information, note to skip the node_doc's details
+    try:
+        missing_info = False
         
-    elif ib:
-        sys.stdout.write("Infiniband?: Yes" + "<br>\n")
-    
-    
-    gpu = compute_query("gpu", node)
-    #sys.stdout.write("GPU?: " + gpu + "<br>")
-    if gpu == 0:
-        sys.stdout.write("GPU?: No" + "<br>\n")
+        # The dropt data
+        sys.stdout.write("CPU:<br>\n")
+        sys.stdout.write("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Type: " + node_doc["cpu"]["cpu_type"] + "<br>\n")
+        sys.stdout.write("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Cores: " + str(node_doc["cpu"]["cpu_num"]) + "<br>\n")
+        sys.stdout.write("GPU: " + "<br>\n")
+        sys.stdout.write("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Cards: " + str(node_doc["gpu"]["num_cards"]) + "<br>\n")
         
-    elif gpu == 1:
-        sys.stdout.write("GPU?: Yes" + "<br>\n")
+        if node_doc["gpu"]["num_cards"] != 0:
+            sys.stdout.write("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Total RAM Size: " + str(node_doc["gpu"]["ram_size"]) + " GB<br>\n")
+            sys.stdout.write("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Total GPU Cores: " + locale.format("%0.0f", node_doc["gpu"]["num_cores"], grouping=True) + "<br>\n")
+            
+        sys.stdout.write("IPs:<br>\n")
+        sys.stdout.write("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GigE IP: " + node_doc["ip"]["gige"] + "<br>\n")
+        sys.stdout.write("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BMC IP: " + node_doc["ip"]["bmc"] + "<br>\n")
+        sys.stdout.write("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IB IP: " + node_doc["ip"]["ib"] + "<br>\n")
+        sys.stdout.write("RAM: " + str(node_doc["ram"]) + " GB<br>\n")
+        sys.stdout.write("Scratch Size: " + str(node_doc["scratch_size"]) + " GB<br>\n")
+        sys.stdout.write("Rack: " + node_doc["rack"] + "<br>\n")
+        sys.stdout.write("Serial: " + node_doc["serial"] + "<br>\n")
+        sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["last_check"])) + "<br>\n")
+        sys.stdout.write("</span></span></td>\n")
+        
+    except KeyError:
+        sys.stdout.write("</span></span></td>\n")
+        
+        missing_info = True
     
     
-    last_check = compute_query("last_check", node)
-    if last_check: sys.stdout.write("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_check)) + "<br>\n")
-    
-    
-    sys.stdout.write("</span></span></td>\n")
     
     
     
+    #
     # State
-    state = compute_query("state", node)
-    if state == None:
-        sys.stdout.write("<td><span style='color:red'><span>unknown</span></span></td>\n")
+    #
+    if node_doc["_id"] == 242 and missing_info is False:
+        sys.stdout.write("<td>up</td>\n")
+        
+    elif node_doc["_id"] == 242 and missing_info is True:
+        sys.stdout.write("<td>up</td>\n")
+        
+        print "<td></td>\n" * 4
+        print "<td style=\"color:red;\">Missing data</td>\n"
+        print "<td></td>\n" * 6
+        
+        continue
+        
+    elif "state" not in node_doc:
+        sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
         
         print "<td></td>" * 11
         
         continue
         
-    elif state == "up":
-        sys.stdout.write("<td>up\n")
+    elif node_doc["state"] == "up" and missing_info is False:
+        sys.stdout.write("<td>up</td>\n")
+        
+    elif node_doc["state"] == "up" and missing_info is True:
+        sys.stdout.write("<td>up</td>\n")
+        
+        print "<td></td>\n" * 4
+        print "<td style=\"color:red;\">Missing data</td>\n"
+        print "<td></td>\n" * 6
+        
+        continue
         
     else:
-        state_time = compute_query("state_time", node)
-        
-        sys.stdout.write("<td><span style='color:red' class='dropt'>" + state + "<span>Since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(state_time)) + "</span></span></td>\n")
+        sys.stdout.write("<td><span style='color:red' class='dropt'>" + node_doc["state"] + "<span>Since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"])) + "</span></span></td>\n")
         
         print "<td></td>" * 11
         
@@ -635,94 +749,115 @@ for node in nodes:
         
         
         
+        
+        
+    #
+    # Stale data?
+    #
+    
+    if int(time.time()) - node_doc["last_check"] > 60 * 30:
+        print "<td></td>\n" * 4
+        print "<td style=\"color:red;\">Stale data</td>\n"
+        print "<td></td>\n" * 6
+        
+        continue
+        
+    
+    
+    
+    
+    #    
     # PBS
-    pbs_state = compute_query("pbs_state", node)
-    if pbs_state == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
+    #
+    
+    if "pbs" not in node_doc:
+        sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
         
-    elif pbs_state == "ok":
+    elif node_doc["pbs"] is True:
         sys.stdout.write("<td>ok</td>\n")
         
     else:
-        sys.stdout.write("<td><span style='color:red'>" + pbs_state + "</span></td>\n")
+        sys.stdout.write("<td style=\"color:red;\">down</td>\n")
         
         
         
+        
+        
+    #    
     # Moab
-    moab = compute_query("moab", node)
-    if moab == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
+    #
+    
+    if "moab" not in node_doc:
+        sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
         
-    elif moab == "ok":
+    elif node_doc["moab"] is True:
         sys.stdout.write("<td>ok</td>\n")
         
     else:
-        sys.stdout.write("<td><span style='color:red'>" + moab + "</span></td>\n")
+        sys.stdout.write("<td style=\"color:red;\">down</td>\n")
         
         
         
+        
+        
+    #    
     # Infiniband
-    infiniband = compute_query("infiniband", node)
-    if infiniband == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
+    #
+    
+    if "infiniband" not in node_doc:
+        sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
         
-    elif infiniband == "ok":
-        sys.stdout.write("<td>ok</td>\n")
-        
-    elif infiniband == "n/a":
-        sys.stdout.write("<td>n/a</td>\n")
-        
-    else:
-        sys.stdout.write("<td><span style='color:red'>" + infiniband + "</span></td>\n")
-
-
-
-    ### Tempurature
-    ##tempurature = compute_query("tempurature", node)
-    ##if tempurature == None:
-        ##sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    ##else:
-        ##sys.stdout.write("<td>" + tempurature + "</td>\n")
-
-
-        
-    # /scratch
-    scratch = compute_query("scratch", node)
-    if scratch == None:
-        sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-    elif scratch == "ok":
+    elif node_doc["infiniband"] is True:
         sys.stdout.write("<td>ok</td>\n")
         
     else:
-        sys.stdout.write("<td><span style='color:red'>" + scratch + "</span></td>\n")
+        sys.stdout.write("<td style=\"color:red;\">down</td>\n")
+
+
+
+        
+    
+    #
+    # Tempurature
+    #
+    
+    #tempurature = compute_query("tempurature", node_doc)
+    #if tempurature == None:
+        #sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
+        
+    #else:
+        #sys.stdout.write("<td>" + tempurature + "</td>\n")
+
 
         
         
-    # Filesystems to check
-    filesystems = {
-        "/data/pkg" : "datapkg",
-        "/data/sam" : "datasam",
-        "/gscratch1" : "gscratch1",
-        "/home" : "home0",
-        "/home1" : "home1",
-        "/home2" : "home2",
-        "/pan" : "panasas",
-    }
+        
+    #
+    # Filesystems
+    #
+    
+    filesystems = [
+        "datapkg",
+        "datasam",
+        "gscratch1",
+        "home0",
+        "home1",
+        "home2",
+        "panasas",
+        "scratch",
+    ]
 
     
-    for mount_point in sorted(filesystems.iterkeys()):
-        mount_status = compute_query(filesystems[mount_point], node)
+    for filesystem in sorted(filesystems):
+        if filesystem not in node_doc["filesystems"]:
+            sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
         
-        if mount_status == None:
-            sys.stdout.write("<td><span style='color:red'>unknown</span></td>\n")
-        
-        elif mount_status == "ok":
+        elif node_doc["filesystems"][filesystem] is True:
             sys.stdout.write("<td>ok</td>\n")
         
         else:
-            sys.stdout.write("<td><span style='color:red'>" + mount_status + "</span></td>\n")
+            sys.stdout.write("<td style=\"color:red;\">down</td>\n")
+        
         
         
         
@@ -730,15 +865,12 @@ for node in nodes:
 
 
 
-# Close the DB, we're done with it
-db.close()
-
 
 
 # Footer
 sys.stdout.write("""    </tbody>
 </table>
-<br><br><br><br><br><br><br>
+<br><br><br><br><br><br><br><br><br><br>
 <script src="beomon-stuff/jquery.stickytableheaders.js" type="text/javascript"></script> 
 
 <script type="text/javascript">

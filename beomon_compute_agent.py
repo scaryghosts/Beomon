@@ -1,8 +1,8 @@
-#!/opt/sam/python/2.6/gcc45/bin/python
+#!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.5.1
-# Last change: Removed unused code
+# Version: 2
+# Last change: Switched from MySQL to MongoDB, added IPs and rack ID, added GPU info
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -13,21 +13,22 @@
 
 
 
-mysql_host = "clusman.frank.sam.pitt.edu"
+import sys, os, re, pymongo, subprocess, time, syslog, signal
+from optparse import OptionParser
+from multiprocessing import cpu_count
+from string import ascii_lowercase
+
+
+
+mongo_host = "clusman.frank.sam.pitt.edu"
 ibv_devinfo = "/usr/bin/ibv_devinfo"
 ipmitool = "/usr/bin/ipmitool"
 lsmod = "/sbin/lsmod"
 dmidecode = "/usr/sbin/dmidecode"
-
-
-
-import sys
-sys.path.append("/opt/sam/beomon/modules/")
-import os, re, subprocess, time, syslog, signal
-from MySQLdb import connect
-from optparse import OptionParser
-from multiprocessing import cpu_count
-from string import ascii_lowercase
+deviceQuery = "/opt/sam/cuda/4.0/cuda/bin/deviceQuery"
+new_compute_data = {}
+red = "\033[31m"
+endcolor = '\033[0m'
 
 
 
@@ -47,23 +48,25 @@ parser.add_option(
 
 
 
-# Connect to the MySQL DB
-def connect_mysql():
-    # Returns a the db object
+# Connect to the DB
+def connect_mongo():
+    # Returns the db object
     
     # Get the DB password
     dbpasshandle = open("/opt/sam/beomon/beomonpass.txt", "r")
     dbpass = dbpasshandle.read().rstrip()
     dbpasshandle.close()
-
         
         
     # Open a DB connection
     try:
-        db = connect(
-            host=mysql_host, user="beomon",
-            passwd=dbpass, db="beomon"
-        )
+        mongo_client = pymongo.MongoClient(mongo_host)
+        
+        db = mongo_client.beomon
+        
+        db.authenticate("beomon", dbpass)
+        
+        del(dbpass)
                                                 
         return db
         
@@ -71,18 +74,22 @@ def connect_mysql():
         sys.stderr.write("Failed to connect to the Beomon database: " + str(err) + "\n")
         sys.exit(1)
         
+        
+        
+# Update the compute collection
+def update_compute_collection(my_compute_data):
+    db.compute.update(
+        {
+            "_id" : node
+        },
+        {
+            "$set" : my_compute_data
+        },
+        upsert = True,
+    )
+    
 
         
-# Query MySQL for a given column of a given node
-def compute_query(cursor, column, node):
-    cursor.execute("SELECT " + column + " FROM compute WHERE node_id=" + node)
-    
-    results = cursor.fetchone()
-    
-    return results[0]
-            
-
-
 # Prepare for subprocess timeouts
 class Alarm(Exception):
     pass
@@ -109,6 +116,8 @@ if match is None:
     sys.exit(1)
 
 node = re.sub("^n", "", hostname)
+
+node = int(node)
         
 
 
@@ -117,20 +126,9 @@ node = re.sub("^n", "", hostname)
 #    
 # Health checks    
 #
-
-# Add a row for the node if one does not exist.
-def add_row(db):
-    cursor = db.cursor()
-    
-    if cursor.execute("SELECT node_id FROM compute WHERE node_id=" + node) == 0:
-        cursor.execute("INSERT INTO compute (node_id) VALUES (" + node + ")")
-            
-        
         
 # Moab
 def check_moab(db):
-    cursor = db.cursor()
-    
     signal.alarm(30)
     
     try:
@@ -141,40 +139,40 @@ def check_moab(db):
             
         sys.stdout.write("Moab: ok\n")
         
-        cursor.execute("UPDATE compute SET moab='ok' WHERE node_id=" + node)
-    
+        new_compute_data["moab"] = True
+        
     except Alarm:
         sys.stdout.write("Moab: Timeout\n")
         
-        cursor.execute("UPDATE compute SET moab=NULL WHERE node_id=" + node)
-    
+        new_compute_data["moab"] = False
+        
     except subprocess.CalledProcessError:
-        sys.stdout.write("Moab: down\n")
+        sys.stdout.write(red + "Moab: down\n" + endcolor)
         
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Moab in state 'down'")
         
-        cursor.execute("UPDATE compute SET moab='down' WHERE node_id=" + node)
+        new_compute_data["moab"] = False
             
     except Exception as err:
-        sys.stderr.write("Moab: sysfail (" + str(err) + ")\n")
+        sys.stderr.write(red + "Moab: sysfail (" + str(err) + ")\n" + endcolor)
         
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Moab in state 'sysfail'")
         
-        cursor.execute("UPDATE compute SET moab='sysfail' WHERE node_id=" + node)
+        new_compute_data["moab"] = False
+        
+        
 
         
         
 # Infiniband
 def infiniband_check(db):
-    cursor = db.cursor()
-    
     # Which nodes to skip
     ib_skip_ranges = [(4,11), (40,52), (59,66), (242,242), (283,284)]
     
     if any(lower <= int(node) <= upper for (lower, upper) in ib_skip_ranges):
-        sys.stdout.write("Infiniband: n/a\n") 
+        sys.stdout.write("Infiniband: n/a\n")
         
-        cursor.execute("UPDATE compute SET infiniband='n/a' WHERE node_id=" + node)
+        new_compute_data["infiniband"] = True
         
     else:
         signal.alarm(30)
@@ -190,34 +188,34 @@ def infiniband_check(db):
 
                 if match:
                     sys.stdout.write("Infiniband: ok\n")
-            
-                    cursor.execute("UPDATE compute SET infiniband='ok' WHERE node_id=" + node)
-            
+                    
+                    new_compute_data["infiniband"] = True
+                    
                 else:
-                    sys.stdout.write("Infiniband: down\n")
+                    sys.stdout.write(red + "Infiniband: down\n" + endcolor)
                     
                     syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Infiniband in state down")
             
-                    cursor.execute("UPDATE compute SET infiniband='down' WHERE node_id=" + node)
-        
-        except Alarm:
-            sys.stdout.write("Infiniband: Timeout\n")
+                    new_compute_data["infiniband"] = False
             
-            cursor.execute("UPDATE compute SET infiniband=NULL WHERE node_id=" + node)
+        except Alarm:
+            sys.stdout.write(red + "Infiniband: Timeout\n" + endcolor)
+            
+            new_compute_data["infiniband"] = "timeout"
             
         except Exception as err:
-            sys.stderr.write("Infiniband: sysfail (" + str(err) + ")")
+            sys.stderr.write(red + "Infiniband: sysfail (" + str(err) + ")" + endcolor)
             
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Infiniband in state sysfail")
             
-            cursor.execute("UPDATE compute SET infiniband='sysfail' WHERE node_id=" + node)
+            new_compute_data["infiniband"] = False
+            
             
 
-        
+
+            
 # Tempurature
 def check_tempurature(db):
-    cursor = db.cursor()
-
     try:
         sensor_name = ""
         temp = False
@@ -238,7 +236,8 @@ def check_tempurature(db):
         else:
             sys.stdout.write("Tempurature: n/a\n")
             
-            cursor.execute("UPDATE compute SET tempurature='n/a' WHERE node_id=" + node)
+            new_compute_data["tempurature"] = True
+
         #sensor_name = "CPU 1 Temp"
 
         signal.alarm(30)
@@ -259,7 +258,7 @@ def check_tempurature(db):
                     
                     sys.stdout.write("Tempurature: " + temp + "C (" + sensor_name + ")\n")
                     
-                    cursor.execute("UPDATE compute SET tempurature='" + temp + "C (" + sensor_name + ")' WHERE node_id=" + node)
+                    new_compute_data["tempurature"] = temp + "C (" + sensor_name + ")"
                     
                     break
                 
@@ -269,25 +268,25 @@ def check_tempurature(db):
             # If we couldn't find a temp...
             if not temp:
                 sys.stdout.write("Tempurature: unknown\n")
-        
-                cursor.execute("UPDATE compute SET tempurature='unknown' WHERE node_id=" + node)
-
+                
+                new_compute_data["tempurature"] = "unknown"
+                
     except Alarm:
         sys.stdout.write("Tempurature: Timeout")
         
-        cursor.execute("UPDATE compute SET tempurature=NULL WHERE node_id=" + node)
+        new_compute_data["tempurature"] = "timeout"
         
     except Exception as err:
         sys.stderr.write("Tempurature: sysfail (" + str(err) + ")")
         
-        cursor.execute("UPDATE compute SET tempurature='sysfail' WHERE node_id=" + node)
+        new_compute_data["tempurature"] = False
+        
 
 
-
+        
+        
 # Filesystems check
 def check_filesystems(db):
-    cursor = db.cursor()
-    
     filesystems = {
         "/data/pkg" : "datapkg",
         "/data/sam" : "datasam",
@@ -298,19 +297,23 @@ def check_filesystems(db):
         "/pan" : "panasas",
         "/scratch" : "scratch",
     }
+    
+    sys.stdout.write("Filesystems:\n")
 
     
     for mount_point in sorted(filesystems.iterkeys()):
         if os.path.ismount(mount_point) is True:
-            sys.stdout.write(mount_point + ": ok\n")
+            sys.stdout.write("     " + mount_point + ": ok\n")
             
-            cursor.execute("UPDATE compute SET " + filesystems[mount_point] + "='ok' WHERE node_id=" + node)
-
+            new_compute_data["filesystems." + filesystems[mount_point]] = True
+            
         else:
-            sys.stdout.write(mount_point + ": failed\n")
+            sys.stdout.write(red + "     " + mount_point + ": failed\n" + endcolor)
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has " + mount_point + " in state failed")
             
-            cursor.execute("UPDATE compute SET " + filesystems[mount_point] + "='failed' WHERE node_id=" + node)
+            new_compute_data["filesystems." + filesystems[mount_point]] = False
+            
+        
         
         
         
@@ -344,11 +347,13 @@ def check_hyperthreading():
 
 
         if num_cores == num_siblings:
-            sys.stdout.write("Hyperthreading: OK (disabled)\n")
+            sys.stdout.write("Hyperthreading: ok (disabled)\n")
             
         else:
-            sys.stdout.write("Hyperthreading: Error (enabled)\n")
+            sys.stdout.write(red + "Hyperthreading: Error (enabled)\n" + endcolor)
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has hyperthreading enabled")
+        
+        
         
         
         
@@ -356,10 +361,14 @@ def check_hyperthreading():
 # General node info
 #    
         
-# CPU model
-def get_cpu_model(db):
-    cursor = db.cursor()
+# CPU info
+def get_cpu_info(db):
+    # Number of cores
+    num_cpu_cores = cpu_count()
     
+    new_compute_data["cpu.cpu_num"] = num_cpu_cores
+    
+    # CPU type
     proc_info_file = open("/proc/cpuinfo", "r")
 
     for line in proc_info_file:
@@ -370,32 +379,65 @@ def get_cpu_model(db):
         if model_match:
             cpu_type = re.sub("\s+", " ", model_match.group(1))
             
-            sys.stdout.write("CPU Type: " + cpu_type + "\n")
-            
-            cursor.execute("UPDATE compute SET cpu_type='" + cpu_type + "' WHERE node_id=" + node)
+            new_compute_data["cpu.cpu_type"] = cpu_type
             
             break
 
     proc_info_file.close()
-
-
-
-# Number of CPU cores
-def get_cpu_count(db):
-    cursor = db.cursor()    
     
-    num_cpu_cores = cpu_count()
-    
-    sys.stdout.write("CPU Cores: " + str(num_cpu_cores) + "\n")
-
-    cursor.execute("UPDATE compute SET cpu_num=" + str(num_cpu_cores) + " WHERE node_id=" + node)
+    # Hyperthreading info
+    # Skip Interlagos nodes
+    if any(lower <= int(node) <= upper for (lower, upper) in [(325,378)]):
+        sys.stdout.write("Hyperthreading: n/a\n")
         
+        new_compute_data["cpu.hyperthreading"] = False
+        
+    else:
+        proc_info_file = open("/proc/cpuinfo", "r")
+
+        for line in proc_info_file:
+            line = line.rstrip()
+            
+            if re.search("^siblings", line) is not None:
+                num_siblings = line.split()[2]
+                
+            elif re.search("^cpu cores", line) is not None:
+                num_cores = line.split()[3]
+                
+                break
+                
+        proc_info_file.close()
+                
+                
+        num_siblings = int(num_siblings)
+        num_cores = int(num_cores)
+
+
+        if num_cores == num_siblings:
+            new_compute_data["cpu.hyperthreading"] = False
+            
+        else:
+            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has hyperthreading enabled")
+            
+            new_compute_data["cpu.hyperthreading"] = True
+    
+    
+    
+    sys.stdout.write("CPU:\n")
+    sys.stdout.write("     CPU Type: " + cpu_type + "\n")
+    sys.stdout.write("     CPU Cores: " + str(num_cpu_cores) + "\n")
+    if new_compute_data["cpu.hyperthreading"] is False:
+        sys.stdout.write("     Hyperthreading: ok (disabled)\n")
+        
+    else:
+        sys.stdout.write(red + "     Hyperthreading: Error (enabled)\n" + endcolor)
+
+
+
         
         
 # RAM amount
 def get_ram_amount(db):
-    cursor = db.cursor()
-    
     ram_amount = int()
 
     signal.alarm(30)
@@ -421,15 +463,15 @@ def get_ram_amount(db):
         
     if ram_amount != 0:
         sys.stdout.write("RAM: " + str(ram_amount / 1024) + " GB\n")
-            
-        cursor.execute("UPDATE compute SET ram='" + str(ram_amount / 1024) + "' WHERE node_id=" + node)
-    
+        
+        new_compute_data["ram"] = ram_amount / 1024
         
         
-# /scratch size we found earlier
+        
+        
+        
+# /scratch size
 def scratch_size(db):
-    cursor = db.cursor()
-    
     scratch_size = int()
     
     for drive_letter in ascii_lowercase:
@@ -447,57 +489,86 @@ def scratch_size(db):
             
     sys.stdout.write("/scratch Size: " + str(scratch_size) + " GB\n")
     
-    cursor.execute("UPDATE compute SET scratch_size=" + str(scratch_size) + " WHERE node_id=" + node)
-        
+    new_compute_data["scratch_size"] = scratch_size
+    
+    
+    
         
         
 # GPU
 def get_gpu_info(db):
-    cursor = db.cursor()
-    
     signal.alarm(30)
-    
-    gpu = False
+
     try:
         with open(os.devnull, "w") as devnull:
-            info = subprocess.Popen([lsmod], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
-            out = info.communicate()[0]
+            # Add a library path deviceQuery needs
+            try:
+                os.environ['LD_LIBRARY_PATH'] += ":/opt/sam/cuda/4.0/cuda/lib64"
+                
+            except KeyError:
+                os.environ['LD_LIBRARY_PATH'] = ":/opt/sam/cuda/4.0/cuda/lib64"
+                
+            info = subprocess.Popen([deviceQuery], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=devnull, shell=True)
+            out = info.communicate("\n")[0]
             
             signal.alarm(0)
+            
+            gpu_info = {}
             
             for line in out.split(os.linesep):
                 line = line.rstrip()
                 
-                match = re.search("^nvidia", line)
-                
-                if match:
-                    gpu = True
+                # If we don't have a GPU, say so and stop looking
+                if re.search("^cudaGetDeviceCount FAILED", line) is not None:
+                    sys.stdout.write("GPU:\n")
+                    sys.stdout.write("     Cards: 0\n")
                     
-                    sys.stdout.write("GPU?: 1\n")
-                    cursor.execute("UPDATE compute SET gpu=1 WHERE node_id=" + node)
+                    gpu_info["num_cards"] = 0
+                    
+                    new_compute_data["gpu"] = False
+                    
+                    break
+                    
+                # How many cards do we have?
+                if re.search("There are (\d+) devices supporting CUDA", line) is not None:
+                    gpu_info["num_cards"] = int(line.split()[2])
+                    
+                    continue
+                    
+                # How much memory do we have?
+                if re.search("^\s+Total amount of global memory:\s+(\d+) bytes", line) is not None:
+                    gpu_info["ram_size"] = int(round((float(line.split()[5]) / 1024.0 / 1024.0 / 1024.0) * gpu_info["num_cards"], 0))
+                    
+                    continue
+                
+                # How many GPU core do we have?
+                if re.search("^\s+Number of cores:\s+(\d+)", line) is not None:
+                    gpu_info["num_cores"] = int(line.split()[3]) * gpu_info["num_cards"]
                     
                     break
                 
-                else:
-                    continue
                 
-            if not gpu == True:
-                sys.stdout.write("GPU?: 0\n")
-                
-                cursor.execute("UPDATE compute SET gpu=0 WHERE node_id=" + node)
-    
+            # Done, print and note our GPU info if we have any
+            if gpu_info["num_cards"] != 0:
+                sys.stdout.write("GPU:\n")
+                sys.stdout.write("     Cards: " + str(gpu_info["num_cards"]) + "\n")
+                sys.stdout.write("     Total RAM Size: " + str(gpu_info["ram_size"]) + " GB\n")
+                sys.stdout.write("     Total GPU Cores: " + str(gpu_info["num_cores"]) + "\n")
+            
+            new_compute_data["gpu"] = gpu_info
+                    
     except Alarm:
-        sys.stdout.write("Failed to check for GPU, process timed out.\n")
+        sys.stdout.write(red + "Failed to check for GPU, process timed out.\n" + endcolor)
         
     except Exception as err:
-        sys.stderr.write("Failed to check for GPU, process failed: " + str(err))
+        sys.stderr.write(red + "Failed to check for GPU, process failed: " + str(err) + endcolor)
             
         
 
+        
+        
 # Serial number
 def get_seral_number(db):
-    cursor = db.cursor()
-    
     signal.alarm(30)
     
     try:
@@ -517,15 +588,131 @@ def get_seral_number(db):
                 
             sys.stdout.write("Serial: " + serial + "\n")
             
-            cursor.execute("UPDATE compute SET serial='" + serial + "' WHERE node_id=" + node)
-
+            new_compute_data["serial"] = serial
+            
     except Alarm:
-        sys.stdout.write("Failed to get serial number, process timed out.\n")
+        sys.stdout.write(red + "Failed to get serial number, process timed out.\n" + endcolor)
         
     except Exception as err:
-        sys.stderr.write("Failed to get serial number, process failed: " + str(err))
+        sys.stderr.write(red + "Failed to get serial number, process failed: " + str(err) + endcolor)
         
         
+        
+        
+        
+# IP addresses
+def get_ip_addresses(db):
+    sys.stdout.write("IPs:\n")
+    
+    if node < 256:
+        sys.stdout.write("     GigE: 10.201.1." + str(node) + "\n")
+        sys.stdout.write("     BMC: 10.202.1." + str(node) + "\n")
+        sys.stdout.write("     IB: 10.203.1." + str(node) + "\n")
+        
+        new_compute_data["ip.gige"] = "10.201.1." + str(node)
+        new_compute_data["ip.bmc"] = "10.202.1." + str(node)
+        new_compute_data["ip.ib"] = "10.203.1." + str(node)
+        
+    elif node > 255:
+        sys.stdout.write("     GigE: 10.201.2." + str(node - 256) + "\n")
+        sys.stdout.write("     BMC: 10.202.2." + str(node - 256) + "\n")
+        sys.stdout.write("     IB: 10.203.2." + str(node - 256) + "\n")
+        
+        new_compute_data["ip.gige"] = "10.201.2." + str(node - 256)
+        new_compute_data["ip.bmc"] = "10.202.2." + str(node - 256)
+        new_compute_data["ip.ib"] = "10.203.2." + str(node - 256)
+        
+
+        
+        
+        
+# Rack ID
+def note_rack_id(db):
+    if node in range(0, 4):
+        sys.stdout.write("Rack: C-0-2\n")
+        
+        new_compute_data["rack"] = "C-0-2"
+        
+        
+    if node in range(4, 14):
+        sys.stdout.write("Rack: C-0-4\n")
+        
+        new_compute_data["rack"] = "C-0-4"
+        
+        
+    if node in range(14, 53):
+        sys.stdout.write("Rack: C-0-3\n")
+        
+        new_compute_data["rack"] = "C-0-3"
+        
+        
+    if node in range(53, 59):
+        sys.stdout.write("Rack: C-0-4\n")
+        
+        new_compute_data["rack"] = "C-0-4"
+        
+        
+    if node in range(59, 113):
+        sys.stdout.write("Rack: C-0-20\n")
+        
+        new_compute_data["rack"] = "C-0-20"
+        
+        
+    if node in range(113, 173):
+        sys.stdout.write("Rack: C-0-19\n")
+        
+        new_compute_data["rack"] = "C-0-19"
+        
+        
+    if node in range(173, 177):
+        sys.stdout.write("Rack: C-0-20\n")
+        
+        new_compute_data["rack"] = "C-0-20"
+        
+        
+    if node in range(177, 211):
+        sys.stdout.write("Rack: C-0-18\n")
+        
+        new_compute_data["rack"] = "C-0-18"
+        
+        
+    if node in range(211, 242):
+        sys.stdout.write("Rack: C-0-17\n")
+        
+        new_compute_data["rack"] = "C-0-17"
+
+    if node == 242:
+        sys.stdout.write("Rack: C-0-2\n")
+        
+        new_compute_data["rack"] = "C-0-2"
+        
+        
+    if node in range(243, 284):
+        sys.stdout.write("Rack: C-0-21\n")
+        
+        new_compute_data["rack"] = "C-0-21"
+        
+        
+    if node in range(284, 325):
+        sys.stdout.write("Rack: C-0-22\n")
+        
+        new_compute_data["rack"] = "C-0-22"
+        
+        
+    if node in range(325, 351):
+        sys.stdout.write("Rack: C-0-23\n")
+        
+        new_compute_data["rack"] = "C-0-23"
+        
+        
+    if node in range(351, 379):
+        sys.stdout.write("Rack: C-0-24\n")
+        
+        new_compute_data["rack"] = "C-0-24"
+
+        
+        
+
         
 ##    
 ## Daemonizer
@@ -534,34 +721,33 @@ def get_seral_number(db):
 
 
 if options.daemonize == False:
-    db = connect_mysql()
+    db = connect_mongo()
     
-    add_row(db)
     check_moab(db)
     infiniband_check(db)
     #check_tempurature(db)
     check_filesystems(db)
-    check_hyperthreading()
-    get_cpu_model(db)
-    get_cpu_count(db)
+    get_cpu_info(db)
+    get_gpu_info(db)
+    get_ip_addresses(db)
     get_ram_amount(db)
     scratch_size(db)
-    get_gpu_info(db)
+    note_rack_id(db)
     get_seral_number(db)
     
     
     # Report that we've now checked ourself
-    cursor = db.cursor()
-    cursor.execute("UPDATE compute SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
+    new_compute_data["last_check"] = int(time.time())
     
+    # Update the compute collection
+    update_compute_collection(new_compute_data)
     
-    # Close the DB, we're done
+    # Close syslog, we're done
     syslog.closelog()
-    db.close()
     
 else:
     # Check if our PID or lock files already exist
-    if os.path.exists("/var/lock/subsys/beomon_compute_agent") and not os.path.exists("/var/run/bemon_compute_agent.pid"):
+    if os.path.exists("/var/lock/subsys/beomon_compute_agent") and not os.path.exists("/var/run/beomon_compute_agent.pid"):
         sys.stderr.write("PID file not found but subsys locked\n")
         sys.exit(1)
         
@@ -578,7 +764,7 @@ else:
     os.dup2(dev_null.fileno(), 1) # STDOUT
 
     # Set STDERR to a log file
-    log_file = open("/opt/sam/beomon/log/" + node + ".log", "a")
+    log_file = open("/opt/sam/beomon/log/" + str(node) + ".log", "a")
     os.dup2(log_file.fileno(), 2) # STDERR
     
     
@@ -638,18 +824,17 @@ else:
     
     
     # Connect to the DB and get the initial info
-    db = connect_mysql()
+    db = connect_mongo()
 
-    add_row(db)
     check_moab(db)
     #check_tempurature(db)
     check_filesystems(db)
-    check_hyperthreading()
-    get_cpu_model(db)
-    get_cpu_count(db)
+    get_cpu_info(db)
+    get_gpu_info(db)
+    get_ip_addresses(db)
     get_ram_amount(db)
     scratch_size(db)
-    get_gpu_info(db)
+    note_rack_id(db)
     get_seral_number(db)
 
     # Give IB time to come up
@@ -657,16 +842,14 @@ else:
     
     # Keep checking in and make sure IB is up
     while True:
-        cursor = db.cursor()
-        
         infiniband_check(db)
         
         # Report that we've now checked ourself
-        cursor.execute("UPDATE compute SET last_check=" + str(int(time.time())) + " WHERE node_id=" + node)
+        new_compute_data["last_check"] = int(time.time())
         
-        # Sleep for 5 minutes, if we wake with time left go back to sleep.
-        wake_time = int(time.time()) + 300
-
-        while int(time.time()) < wake_time:
-            time.sleep(30)
+        # Update the compute collection
+        update_compute_collection(new_compute_data)
+        
+        # Sleep for 5 minutes
+        time.sleep(60 * 5)
     
