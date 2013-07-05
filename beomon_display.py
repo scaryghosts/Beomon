@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 3
-# Last change: Switched from MySQL to MongoDB, added IPs and rack ID
+# Version: 3.1
+# Last change: Removed IE detection, fixed the links to the CSS and JS files
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -103,18 +103,11 @@ sys.stdout.write("""Content-type: text/html
 <html>
 <head>
 <title>Frank Cluster Status</title>
-<link href="beomon-stuff/style.css" media="all" rel="stylesheet" type="text/css">
+<link href="../beomon-stuff/style.css" media="all" rel="stylesheet" type="text/css">
 </head>
 <body>
 
-<script src="beomon-stuff/jquery.min.js" type="text/javascript"></script>
-
-<script type="text/javascript">
-  // IE feature detection
-  if(!jQuery.support.htmlSerialize){
-    document.write("<center><p><span style='color:red;background-color:black;font-size:150%'>WARNING: You appear to be unsing an usupported browser.  Please use Firefox, Chromium or Chrome instead.</span></p></center>");
-  }
-</script>
+<script src="../beomon-stuff/jquery.min.js" type="text/javascript"></script>
 """)
 
 
@@ -871,7 +864,7 @@ for node_doc in db.compute.find().sort("_id", 1):
 sys.stdout.write("""    </tbody>
 </table>
 <br><br><br><br><br><br><br><br><br><br>
-<script src="beomon-stuff/jquery.stickytableheaders.js" type="text/javascript"></script> 
+<script src="../beomon-stuff/jquery.stickytableheaders.js" type="text/javascript"></script> 
 
 <script type="text/javascript">
 
