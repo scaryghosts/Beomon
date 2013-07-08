@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2
-# Last change: Switched from MySQL to MongoDB
+# Version: 2.1
+# Last change: Removed "NOC-NETCOOL-TICKET" from node down alert
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -38,10 +38,10 @@ num_state = {
 
 
 # How were we called?
-parser = OptionParser("%prog [options] $nodes\n" + 
+parser = OptionParser("%prog [options] [nodes ...]\n" + 
     "Beomon master agent.  This program will check the status of \n" + 
     "the compute nodes given as an arg and update the Beomon database.\n" + 
-    "The $nodes parameter accepts bpstat's node syntax (e.g. 0-6,8-9)."
+    "The [nodes ...] parameter accepts bpstat's node syntax (e.g. 0-6,8-9)."
 )
 
 (options, args) = parser.parse_args()
@@ -533,10 +533,10 @@ for line in bpstat_out.split(os.linesep):
                 ## If the node has been down for more than 30 minutes, throw an alert
                 if (int(time.time()) - node_db_info["state_time"]) >= (60 * 30):
                     if node_db_info["rack"] is not None:
-                        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " is not up, state: down, rack: " + node_db_info["rack"])
+                        syslog.syslog(syslog.LOG_ERR, "Node " + str(node) + " is not up, state: down, rack: " + node_db_info["rack"])
                         
                     else:
-                        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " is not up, state: down")
+                        syslog.syslog(syslog.LOG_ERR, "Node " + str(node) + " is not up, state: down")
                    
                 
             else:
