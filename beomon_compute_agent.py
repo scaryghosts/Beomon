@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2
-# Last change: Switched from MySQL to MongoDB, added IPs and rack ID, added GPU info
+# Version: 2.1
+# Last change: Removed rack location code (moved it to beomon_master_egent.py)
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -626,97 +626,9 @@ def get_ip_addresses(db):
         
         
         
-# Rack ID
-def note_rack_id(db):
-    if node in range(0, 4):
-        sys.stdout.write("Rack: C-0-2\n")
-        
-        new_compute_data["rack"] = "C-0-2"
-        
-        
-    if node in range(4, 14):
-        sys.stdout.write("Rack: C-0-4\n")
-        
-        new_compute_data["rack"] = "C-0-4"
-        
-        
-    if node in range(14, 53):
-        sys.stdout.write("Rack: C-0-3\n")
-        
-        new_compute_data["rack"] = "C-0-3"
-        
-        
-    if node in range(53, 59):
-        sys.stdout.write("Rack: C-0-4\n")
-        
-        new_compute_data["rack"] = "C-0-4"
-        
-        
-    if node in range(59, 113):
-        sys.stdout.write("Rack: C-0-20\n")
-        
-        new_compute_data["rack"] = "C-0-20"
-        
-        
-    if node in range(113, 173):
-        sys.stdout.write("Rack: C-0-19\n")
-        
-        new_compute_data["rack"] = "C-0-19"
-        
-        
-    if node in range(173, 177):
-        sys.stdout.write("Rack: C-0-20\n")
-        
-        new_compute_data["rack"] = "C-0-20"
-        
-        
-    if node in range(177, 211):
-        sys.stdout.write("Rack: C-0-18\n")
-        
-        new_compute_data["rack"] = "C-0-18"
-        
-        
-    if node in range(211, 242):
-        sys.stdout.write("Rack: C-0-17\n")
-        
-        new_compute_data["rack"] = "C-0-17"
-
-    if node == 242:
-        sys.stdout.write("Rack: C-0-2\n")
-        
-        new_compute_data["rack"] = "C-0-2"
-        
-        
-    if node in range(243, 284):
-        sys.stdout.write("Rack: C-0-21\n")
-        
-        new_compute_data["rack"] = "C-0-21"
-        
-        
-    if node in range(284, 325):
-        sys.stdout.write("Rack: C-0-22\n")
-        
-        new_compute_data["rack"] = "C-0-22"
-        
-        
-    if node in range(325, 351):
-        sys.stdout.write("Rack: C-0-23\n")
-        
-        new_compute_data["rack"] = "C-0-23"
-        
-        
-    if node in range(351, 379):
-        sys.stdout.write("Rack: C-0-24\n")
-        
-        new_compute_data["rack"] = "C-0-24"
-
-        
-        
-
-        
-##    
-## Daemonizer
-##
+#    
+# Daemonizer
+#
 
 
 
@@ -732,7 +644,6 @@ if options.daemonize == False:
     get_ip_addresses(db)
     get_ram_amount(db)
     scratch_size(db)
-    note_rack_id(db)
     get_seral_number(db)
     
     
@@ -834,7 +745,6 @@ else:
     get_ip_addresses(db)
     get_ram_amount(db)
     scratch_size(db)
-    note_rack_id(db)
     get_seral_number(db)
 
     # Give IB time to come up
