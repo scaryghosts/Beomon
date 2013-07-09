@@ -1,8 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.1
-# Last change: Removed "NOC-NETCOOL-TICKET" from node down alert
+# Version: 2.2
+# Last change: Keep history of up/down state change times in the DB, note rack location
+# (code migrated from beomon_compute_agent.py)
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -287,7 +288,6 @@ for line in bpstat_out.split(os.linesep):
             "last_check" : 1,
             "state" : 1,
             "state_time" : 1,
-            "rack" : 1,
             "_id" : 0,
         }
     )
@@ -299,7 +299,6 @@ for line in bpstat_out.split(os.linesep):
         node_db_info["last_check"] = None
         node_db_info["state"] = None
         node_db_info["state_time"] = None
-        node_db_info["rack"] = None
         
     else:
         try:
@@ -320,17 +319,63 @@ for line in bpstat_out.split(os.linesep):
         except KeyError:
             node_db_info["state_time"] = None
             
-        try:
-            garbage = node_db_info["rack"]
-            
-        except KeyError:
-            node_db_info["rack"] = None
-
-        
+    
+    
     sys.stdout.write("Node: " + str(node) + "\n")
+    
+    
     
     state = ""
     new_compute_data = {}
+    
+    
+    
+    # Note the rack location
+    if node in range(0, 4):
+        new_compute_data["rack"] = "C-0-2"
+        
+    elif node in range(4, 14):
+        new_compute_data["rack"] = "C-0-4"
+        
+    elif node in range(14, 53):
+        new_compute_data["rack"] = "C-0-3"
+        
+    elif node in range(53, 59):
+        new_compute_data["rack"] = "C-0-4"
+        
+    elif node in range(59, 113):
+        new_compute_data["rack"] = "C-0-20"
+        
+    elif node in range(113, 173):
+        new_compute_data["rack"] = "C-0-19"
+        
+    elif node in range(173, 177):
+        new_compute_data["rack"] = "C-0-20"
+        
+    elif node in range(177, 211):
+        new_compute_data["rack"] = "C-0-18"
+        
+    elif node in range(211, 242):
+        new_compute_data["rack"] = "C-0-17"
+
+    elif node == 242:
+        new_compute_data["rack"] = "C-0-2"
+        
+    elif node in range(243, 284):
+        new_compute_data["rack"] = "C-0-21"
+        
+    elif node in range(284, 325):
+        new_compute_data["rack"] = "C-0-22"
+        
+    elif node in range(325, 351):
+        new_compute_data["rack"] = "C-0-23"
+        
+    elif node in range(351, 379):
+        new_compute_data["rack"] = "C-0-24"
+        
+    else:
+        new_compute_data["rack"] = "unknown"
+    
     
     
     if status == "up":
@@ -384,6 +429,19 @@ for line in bpstat_out.split(os.linesep):
             new_compute_data["state"] = "up"
             
             new_compute_data["state_time"] = int(time.time())
+            
+            # Update the compute collection
+            db.compute.update(
+                {
+                    "_id" : node
+                },
+                {
+                    "$push" : {
+                            "up_times" : int(time.time())
+                        }
+                },
+                upsert = True,
+            )
             
         
     elif status == "down": # Really could be orphan or partnered instead of down
@@ -532,11 +590,7 @@ for line in bpstat_out.split(os.linesep):
                 
                 ## If the node has been down for more than 30 minutes, throw an alert
                 if (int(time.time()) - node_db_info["state_time"]) >= (60 * 30):
-                    if node_db_info["rack"] is not None:
-                        syslog.syslog(syslog.LOG_ERR, "Node " + str(node) + " is not up, state: down, rack: " + node_db_info["rack"])
-                        
-                    else:
-                        syslog.syslog(syslog.LOG_ERR, "Node " + str(node) + " is not up, state: down")
+                    syslog.syslog(syslog.LOG_ERR, "Node " + str(node) + " is not up, state: down, rack: " + new_compute_data["rack"])
                    
                 
             else:
@@ -546,6 +600,19 @@ for line in bpstat_out.split(os.linesep):
                 
                 new_compute_data["state"] = "down"
                 new_compute_data["state_time"] = int(time.time())
+                
+                # Update the compute collection
+                db.compute.update(
+                    {
+                        "_id" : node
+                    },
+                    {
+                        "$push" : {
+                                "down_times" : int(time.time())
+                            }
+                    },
+                    upsert = True,
+                )
                 
             
     elif status == "boot":
