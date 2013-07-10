@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 3.1
-# Last change: Removed IE detection, fixed the links to the CSS and JS files
+# Version: 3.1.1
+# Last change: Changed the summary table to work better with smaller resolutions and window resizes
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -121,17 +121,17 @@ sys.stdout.write("""
     <p>Node state (up, down, boot ...) is checked every 5 minutes.</p>
 </center>
     
-<table id="summary" summary="Cluster Summary" width="65%" class="summary">
+<table id="summary" summary="Cluster Summary" class="summary">
     <col width="15%">  <!--Compute summary-->
     <col width="10%">
     
-    <col width="9%">  <!--Hidden column-->
+    <col>  <!--Hidden column-->
     
     <col width="9%">  <!--Storage summary-->
     <col width="10%">
     <col width="4%">
     
-    <col width="9%">  <!--Hidden column-->
+    <col>  <!--Hidden column-->
     
     <col width="15%">  <!--Master summary-->
     <col width="8%">
@@ -863,7 +863,7 @@ for node_doc in db.compute.find().sort("_id", 1):
 # Footer
 sys.stdout.write("""    </tbody>
 </table>
-<br><br><br><br><br><br><br><br><br><br>
+<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 <script src="../beomon-stuff/jquery.stickytableheaders.js" type="text/javascript"></script> 
 
 <script type="text/javascript">

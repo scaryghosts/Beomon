@@ -2,8 +2,8 @@
  * Description: Beomon status viewer's CSS
  * Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
  * Derived from unlicensed work by Adam Cerini of the University of Pittsburgh
- * Version: 2.1
- * Last change: Removed unused code
+ * Version: 2.1.1
+ * Last change: Changed the summary table to work better with smaller resolutions and window resizes
 */
 
 
@@ -93,6 +93,7 @@ table.summary {
     margin: auto;
     background: whitesmoke;
     border-collapse: collapse;
+    width: 100px;
 }
 
 table.summary th, table.summary thead th, table.summary thead td {
@@ -101,6 +102,7 @@ table.summary th, table.summary thead th, table.summary thead td {
     padding: 0.4em;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 15px;
+    white-space:nowrap;
 }
 
 table.summary td {
@@ -109,6 +111,7 @@ table.summary td {
     padding: 0.2em;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 14px;
+    white-space:nowrap;
 }
 
 table.summary th {
