@@ -1,9 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.2
-# Last change: Keep history of up/down state change times in the DB, note rack location
-# (code migrated from beomon_compute_agent.py)
+# Version: 2.2.1
+# Last change: Fixed a bug causing early "node boot" alerts
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -623,16 +622,16 @@ for line in bpstat_out.split(os.linesep):
         if node_db_info["state"] == "boot":
             sys.stdout.write("State: boot - known\n")
             
+            # If the node has been in boot state for more than 2 hours, log an alert
+            if int(time.time()) - node_db_info["state_time"] >= (60 * 60 * 2):
+                syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " is not up, state: boot")
+            
         else:
             sys.stdout.write("State: boot - new\n")
             
             new_compute_data["state"] = "boot"
             new_compute_data["state_time"] = int(time.time())
             
-        # If the node has been in boot state for more than 2 hours, log an alert
-        if int(time.time()) - node_db_info["state_time"] >= (60 * 60 * 2):
-            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " is not up, state: boot")
-        
         
     elif status == "error":
         state = "error"
