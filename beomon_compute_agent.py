@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.1
-# Last change: Removed rack location code (moved it to beomon_master_egent.py)
+# Version: 2.1.1
+# Last change: Fixed a bug where stale data was being written to the DB in daemon mode
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -759,6 +759,9 @@ else:
         
         # Update the compute collection
         update_compute_collection(new_compute_data)
+        
+        # Forget what we checked
+        new_compute_data = {}
         
         # Sleep for 5 minutes
         time.sleep(60 * 5)
