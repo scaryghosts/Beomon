@@ -103,6 +103,9 @@ Compute nodes should run it when they boot or you can run it by hand with an arg
 node you want to start the compute agent on.
 
 
+**beomon_outage.py** will show when compute nodes went down, when they came back up and how long they were down.
+
+
 **beomon_display.py** is a CGI program to be ran by a Web server.  This will display a table of the
 current status of each compute node.  Hover over the node number to see the node's details (CPU type, RAM 
 amount, etc.).  It also displays a summary/status of head nodes and storage.  This does not support Internet Explorer.
