@@ -1,8 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 3.1.1
-# Last change: Changed the summary table to work better with smaller resolutions and window resizes
+# Version: 3.1.2
+# Last change: Show problems in bold text, use a red table row background for 
+# down or errored nodes
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -183,8 +184,8 @@ def storage_detail_cols(mount_point):
         
     else:
         sys.stdout.write("<td>" + mount_point + "</td>\n")
-        sys.stdout.write("<td style=\"color:red;\">Unknown</td></td>\n")
-        sys.stdout.write("<td style=\"color:red;\">Unknown</td></td>\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td>\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td>\n")
 
 
 
@@ -214,7 +215,7 @@ sys.stdout.write("<td style=\"\"><span class='dropt'>Head0a<span>\n")
 master_info = db.head_clusman.find_one({"_id" : "head0a"})
 
 if master_info is None:
-    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
+    sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
     sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
@@ -226,7 +227,7 @@ if master_info is not None:
         sys.stdout.write("<td>ok</td></tr>\n\n")
     
     else:
-        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
 
     
 
@@ -252,7 +253,7 @@ sys.stdout.write("<td><span class='dropt'>Head0b<span>\n")
 master_info = db.head_clusman.find_one({"_id" : "head0b"})
 
 if master_info is None:
-    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
+    sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
     sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
@@ -264,7 +265,7 @@ if master_info is not None:
         sys.stdout.write("<td>ok</td></tr>\n\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
 
 
 
@@ -300,7 +301,7 @@ sys.stdout.write("<td><span class='dropt'>Head1a<span>\n")
 master_info = db.head_clusman.find_one({"_id" : "head1a"})
 
 if master_info is None:
-    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
+    sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
     sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
@@ -312,7 +313,7 @@ if master_info is not None:
         sys.stdout.write("<td>ok</td></tr>\n\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
 
 
 
@@ -348,7 +349,7 @@ sys.stdout.write("<td><span class='dropt'>Head1b<span>\n")
 master_info = db.head_clusman.find_one({"_id" : "head1b"})
 
 if master_info is None:
-    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
+    sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
     sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
@@ -360,7 +361,7 @@ if master_info is not None:
         sys.stdout.write("<td>ok</td></tr>\n\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
 
 
     
@@ -397,7 +398,7 @@ sys.stdout.write("<td><span class='dropt'>Head2a<span>\n")
 master_info = db.head_clusman.find_one({"_id" : "head2a"})
 
 if master_info is None:
-    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
+    sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
     sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
@@ -409,7 +410,7 @@ if master_info is not None:
         sys.stdout.write("<td>ok</td></tr>\n\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
 
 
     
@@ -446,7 +447,7 @@ sys.stdout.write("<td><span class='dropt'>Head2b<span>\n")
 master_info = db.head_clusman.find_one({"_id" : "head2b"})
 
 if master_info is None:
-    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
+    sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
     sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
@@ -458,7 +459,7 @@ if master_info is not None:
         sys.stdout.write("<td>ok</td></tr>\n\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
 
 
     
@@ -492,7 +493,7 @@ sys.stdout.write("<td><span class='dropt'>Head3a<span>\n")
 master_info = db.head_clusman.find_one({"_id" : "head3a"})
 
 if master_info is None:
-    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
+    sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
     sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
@@ -504,7 +505,7 @@ if master_info is not None:
         sys.stdout.write("<td>ok</td></tr>\n\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
 
 
     
@@ -538,7 +539,7 @@ sys.stdout.write("<td><span class='dropt'>Head3b<span>\n")
 master_info = db.head_clusman.find_one({"_id" : "head3b"})
 
 if master_info is None:
-    sys.stdout.write("<td style=\"color:red;\">Unknown</td></td></tr>\n\n")
+    sys.stdout.write("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
     
 else:
     sys.stdout.write(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
@@ -550,7 +551,7 @@ if master_info is not None:
         sys.stdout.write("<td>ok</td></tr>\n\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red\">Down</td></tr>\n\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
         
         
         
@@ -662,7 +663,12 @@ for node_doc in db.compute.find().sort("_id", 1):
     # Node number
     #
     
-    sys.stdout.write("<tr>\n<td><span class='dropt'>" + str(node_doc["_id"]) + "<span style=text-align:left>\n")
+    if "state" in node_doc and (node_doc["state"] == "down" or node_doc["state"] == "error"):
+        sys.stdout.write("<tr style=\"background-color:red\">\n<td><span class='dropt'>" + str(node_doc["_id"]) + "<span style=text-align:left>\n")
+        
+    else:
+        sys.stdout.write("<tr>\n<td><span class='dropt'>" + str(node_doc["_id"]) + "<span style=text-align:left>\n")
+    
     
     # If it looks like we are missing information, note to skip the node_doc's details
     try:
@@ -709,13 +715,13 @@ for node_doc in db.compute.find().sort("_id", 1):
         sys.stdout.write("<td>up</td>\n")
         
         print "<td></td>\n" * 4
-        print "<td style=\"color:red;\">Missing data</td>\n"
+        print "<td style=\"font-weight:bold;color:red;\">Missing data</td>\n"
         print "<td></td>\n" * 6
         
         continue
         
     elif "state" not in node_doc:
-        sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
         
         print "<td></td>" * 11
         
@@ -728,13 +734,13 @@ for node_doc in db.compute.find().sort("_id", 1):
         sys.stdout.write("<td>up</td>\n")
         
         print "<td></td>\n" * 4
-        print "<td style=\"color:red;\">Missing data</td>\n"
+        print "<td style=\"font-weight:bold;color:red;\">Missing data</td>\n"
         print "<td></td>\n" * 6
         
         continue
         
     else:
-        sys.stdout.write("<td><span style='color:red' class='dropt'>" + node_doc["state"] + "<span>Since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"])) + "</span></span></td>\n")
+        sys.stdout.write("<td><span style='font-weight:bold;' class='dropt'>" + node_doc["state"] + "<span>Since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"])) + "</span></span></td>\n")
         
         print "<td></td>" * 11
         
@@ -750,7 +756,7 @@ for node_doc in db.compute.find().sort("_id", 1):
     
     if int(time.time()) - node_doc["last_check"] > 60 * 30:
         print "<td></td>\n" * 4
-        print "<td style=\"color:red;\">Stale data</td>\n"
+        print "<td style=\"font-weight:bold;color:red;\">Stale data</td>\n"
         print "<td></td>\n" * 6
         
         continue
@@ -764,13 +770,13 @@ for node_doc in db.compute.find().sort("_id", 1):
     #
     
     if "pbs" not in node_doc:
-        sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
         
     elif node_doc["pbs"] is True:
         sys.stdout.write("<td>ok</td>\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red;\">down</td>\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red;\">down</td>\n")
         
         
         
@@ -781,13 +787,13 @@ for node_doc in db.compute.find().sort("_id", 1):
     #
     
     if "moab" not in node_doc:
-        sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
         
     elif node_doc["moab"] is True:
         sys.stdout.write("<td>ok</td>\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red;\">down</td>\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red;\">down</td>\n")
         
         
         
@@ -798,13 +804,13 @@ for node_doc in db.compute.find().sort("_id", 1):
     #
     
     if "infiniband" not in node_doc:
-        sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
         
     elif node_doc["infiniband"] is True:
         sys.stdout.write("<td>ok</td>\n")
         
     else:
-        sys.stdout.write("<td style=\"color:red;\">down</td>\n")
+        sys.stdout.write("<td style=\"font-weight:bold;color:red;\">down</td>\n")
 
 
 
@@ -816,7 +822,7 @@ for node_doc in db.compute.find().sort("_id", 1):
     
     #tempurature = compute_query("tempurature", node_doc)
     #if tempurature == None:
-        #sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
+        #sys.stdout.write("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
         
     #else:
         #sys.stdout.write("<td>" + tempurature + "</td>\n")
@@ -843,13 +849,13 @@ for node_doc in db.compute.find().sort("_id", 1):
     
     for filesystem in sorted(filesystems):
         if filesystem not in node_doc["filesystems"]:
-            sys.stdout.write("<td style=\"color:red;\">unknown</td>\n")
+            sys.stdout.write("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
         
         elif node_doc["filesystems"][filesystem] is True:
             sys.stdout.write("<td>ok</td>\n")
         
         else:
-            sys.stdout.write("<td style=\"color:red;\">down</td>\n")
+            sys.stdout.write("<td style=\"font-weight:bold;color:red;\">down</td>\n")
         
         
         
