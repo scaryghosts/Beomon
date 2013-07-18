@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Show when compute nodes were down
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1
-# Last change: Initial version
+# Version: 1.1
+# Last change: Added node 238 to the skip list
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -107,7 +107,7 @@ for node in xrange(range_low, range_high):
     
     
     # Skip dead nodes
-    if node in [191, 199, 203, 226, 229, 241, 241]:
+    if node in [191, 199, 203, 226, 229, 238, 241]:
         continue
     
 
