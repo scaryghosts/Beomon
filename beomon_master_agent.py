@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.2.1
-# Last change: Fixed a bug causing early "node boot" alerts
+# Version: 2.2.2
+# Last change: Changed which compute nodes head dnoes are masters of
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -168,43 +168,43 @@ elif hostname == "head0a.frank.sam.pitt.edu":
     partner = "head0b.frank.sam.pitt.edu"
     
     new_head_clusman_data["compute_node_class"] = "Original Frank and Fermi Penguin"
-    new_head_clusman_data["primary_of"] = "0-88"
-    new_head_clusman_data["secondary_of"] = "89-176"
+    new_head_clusman_data["primary_of"] = "0-112,153-158"
+    new_head_clusman_data["secondary_of"] = "113-152,159-176"
     
 elif hostname == "head0b.frank.sam.pitt.edu":
     partner = "head0a.frank.sam.pitt.edu"
     
     new_head_clusman_data["compute_node_class"] = "Original Frank and Fermi Penguin"
-    new_head_clusman_data["primary_of"] = "89-176"
-    new_head_clusman_data["secondary_of"] = "0-88"
+    new_head_clusman_data["primary_of"] = "113-152,159-176"
+    new_head_clusman_data["secondary_of"] = "0-112,153-158"
     
 elif hostname == "head1a.frank.sam.pitt.edu":
     partner = "head1b.frank.sam.pitt.edu"
     
     new_head_clusman_data["compute_node_class"] = "IBM"
-    new_head_clusman_data["primary_of"] = "177-209"
-    new_head_clusman_data["secondary_of"] = "210-241"
+    new_head_clusman_data["primary_of"] = "177-223"
+    new_head_clusman_data["secondary_of"] = "224-241"
     
 elif hostname == "head1b.frank.sam.pitt.edu":
     partner = "head1a.frank.sam.pitt.edu"
     
     new_head_clusman_data["compute_node_class"] = "IBM"
-    new_head_clusman_data["primary_of"] = "210-241"
-    new_head_clusman_data["secondary_of"] = "177-209"
+    new_head_clusman_data["primary_of"] = "224-241"
+    new_head_clusman_data["secondary_of"] = "177-223"
     
 elif hostname == "head2a.frank.sam.pitt.edu":
     partner = "head2b.frank.sam.pitt.edu"
     
     new_head_clusman_data["compute_node_class"] = "Intel Sandybridge"
-    new_head_clusman_data["primary_of"] = "243-284"
-    new_head_clusman_data["secondary_of"] = "285-324"
+    new_head_clusman_data["primary_of"] = "242-278"
+    new_head_clusman_data["secondary_of"] = "279-324"
     
 elif hostname == "head2b.frank.sam.pitt.edu":
     partner = "head2a.frank.sam.pitt.edu"
     
     new_head_clusman_data["compute_node_class"] = "Intel Sandybridge"
-    new_head_clusman_data["primary_of"] = "285-324"
-    new_head_clusman_data["secondary_of"] = "243-284"
+    new_head_clusman_data["primary_of"] = "279-324"
+    new_head_clusman_data["secondary_of"] = "242-278"
     
 elif hostname == "head3a.frank.sam.pitt.edu":
     partner = "head3b.frank.sam.pitt.edu"
