@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4
-# Last change: Migrated to the Bottle module, added node detail page for each node
+# Version: 4.0.1
+# Last change: Changed how outage durations are displayed
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -195,11 +195,7 @@ def show_node_page(node):
             if min_down is not None and min_up is not None and min_down < min_up:
                 diff = min_up - min_down
                 
-                days = diff / (60 * 60 * 24)
-                
-                remaining_seconds = diff - days
-                
-                outage_details["outage"] = str(days) + ":" + time.strftime('%H:%M:%S', time.gmtime(remaining_seconds)) + ""
+                outage_details["outage"] = time.strftime('%H hours %M minutes %S seconds', time.gmtime(diff)) + ""
                 
             else:
                 outage_details["outage"] = "Unknown"
