@@ -46,6 +46,7 @@ capable of running a Python script should work but here I use Apache httpd.
 * Optionally, disable the Web interface and preallocation: 'nohttpinterface = true' and 'noprealloc = true'
 * Start mongod: `service mongod start`
 
+
 ### Prepare the database
 * Enter the mongo shell: `mongo`
 * Switch to the admin database: `> use admin`
@@ -68,14 +69,13 @@ capable of running a Python script should work but here I use Apache httpd.
 
 ### Configure Apache httpd
 
-* `yum install httpd`
-* Add "LoadModule cgi_module modules/mod_cgi.so" to the configuration
-* Add "ScriptAlias /beomon /path/to/webroot/bemon-stuff/beomon_display.py" to the configuration
-* Copy style.css, [jquery.stickytableheaders.js](https://github.com/jmosbech/StickyTableHeaders/tree/master/js) and [jquery.min.js](http://code.jquery.com/jquery-1.8.3.min.js) to /path/to/webroot/beomon-stuff/
-* Note: The directory these files are put cannot be called "beomon" since that will trigger the ScriptAlias 
-* directive when the script pulls in the other CSS and JavaScript files.
-* Ensure the user httpd runs as can execute the program and access the other files.
+* `yum install httpd mod_wsgi`
+* Add the Beomon configuration file to /etc/httpd/conf.d
+* Copy style.css, [jquery.stickytableheaders.js](https://github.com/jmosbech/StickyTableHeaders/tree/master/js) and [jquery.min.js](http://code.jquery.com/jquery-1.8.3.min.js) to /opt/sam/beomon/html/static/
+* Ensure the user httpd runs as can execute the program and access the files.
 * Go to http://your.web.server/beomon
+
+
 
 The programs
 ------------
@@ -106,8 +106,8 @@ node you want to start the compute agent on.
 **beomon_outage.py** will show when compute nodes went down, when they came back up and how long they were down.
 
 
-**beomon_display.py** is a CGI program to be ran by a Web server.  This will display a table of the
-current status of each compute node.  Hover over the node number to see the node's details (CPU type, RAM 
+**beomon_display.py** is a WSGI program to be ran by a Web server.  This will display a table of the
+current status of each compute node.  Click the node number to see the node's details (CPU type, RAM 
 amount, etc.).  It also displays a summary/status of head nodes and storage.  This does not support Internet Explorer.
 
 It uses style.css and [jquery.stickytableheaders.js](https://github.com/jmosbech/StickyTableHeaders).
