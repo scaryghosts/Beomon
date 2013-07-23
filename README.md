@@ -21,7 +21,8 @@ to be a possible master of node 10, one master will consider the node
 it up, boot or error.  Otherwise both masters consider it down
 or orphaned when no master is in control.
 
-![Beomon Display](http://www.pitt.edu/~jaw171/beomon_display_screenshot.jpg)
+![Beomon Display](http://www.pitt.edu/~jaw171/beomon/main.jpg)
+![Beomon Display Nodes](http://www.pitt.edu/~jaw171/beomon/nodes.jpg)
 
 License
 -------
