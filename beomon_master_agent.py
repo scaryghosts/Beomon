@@ -1,8 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.2.2
-# Last change: Changed which compute nodes head dnoes are masters of
+# Version: 2.3
+# Last change: Added a feature to verify local config files match agaisnt head0a's config files
+# and moved to the ConfigParser module
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -13,14 +14,11 @@
 
 
 
-import sys, os, re, pymongo, subprocess, time, syslog, paramiko, signal
+import sys, os, re, pymongo, subprocess, time, syslog, paramiko, signal, hashlib, ConfigParser
 from optparse import OptionParser
 
 
 
-mongo_host = "clusman.frank.sam.pitt.edu"
-clusman_host = "clusman.frank.sam.pitt.edu"
-pbsnodes = "/opt/sam/torque/3.0.6-clusman/bin/pbsnodes"
 bpstat = "/usr/bin/bpstat"
 red = "\033[31m"
 endcolor = '\033[0m' # end color
@@ -57,6 +55,8 @@ except IndexError:
 
     
     
+    
+    
 hostname = os.uname()[1]
 
 
@@ -77,6 +77,15 @@ signal.signal(signal.SIGALRM, alarm_handler)
 # Prepare syslog
 syslog.openlog(os.path.basename(sys.argv[0]), syslog.LOG_NOWAIT, syslog.LOG_DAEMON)
 
+
+
+# Read the config file
+config = ConfigParser.ConfigParser()
+config.read("/opt/sam/beomon/etc/beomon.conf")
+
+main_config = dict(config.items("main"))
+hash_files = dict(config.items("hash_files"))
+
     
     
 # Get the DB password
@@ -88,7 +97,7 @@ dbpasshandle.close()
     
 # Open a DB connection
 try:
-    mongo_client = pymongo.MongoClient(mongo_host)
+    mongo_client = pymongo.MongoClient(main_config["mongo_host"])
 
     db = mongo_client.beomon
     
@@ -220,6 +229,79 @@ elif hostname == "head3b.frank.sam.pitt.edu":
     new_head_clusman_data["primary_of"] = "351-378"
     new_head_clusman_data["secondary_of"] = "325-350"
     
+    
+    
+    
+    
+#
+# Check for files which are not the same as those on head0a
+#
+
+# Get head0a's config file hashes
+head0a_doc = db.head_clusman.find_one(
+    {
+        "_id" : "head0a"
+    },
+    {
+        "file_hashes" : 1,
+        "_id" : 0,
+    }
+)
+
+head0a_file_hashes = head0a_doc["file_hashes"]
+
+
+local_file_hashes = {}
+
+# Loop through each file we need to hash
+for _, each_file in hash_files.items():
+    try:
+        each_file_handle = open(each_file, "rb")
+        
+    except Exception as err:
+        sys.stderr.write("Unable to open " + each_file + " for hashing: " + str(err) + "\n")
+        
+        continue
+    
+    
+    # MongoDB does not support dots in keys...
+    each_file_nodot = re.sub(r"\.", "[DOT]", each_file)
+        
+        
+    hash_obj = hashlib.sha512()
+    
+    
+    while True:
+        bytes = each_file_handle.read(4096)
+        
+        # Did we reach the end of the file?
+        if not bytes:
+            break
+            
+        hash_obj.update(bytes)
+        
+        
+    local_digest = hash_obj.hexdigest()
+    
+    local_file_hashes[each_file_nodot] = local_digest
+    
+    
+    # Does the local digest match head0a's?
+    if not hostname == "head0a.frank.sam.pitt.edu":
+        try:
+            if not head0a_file_hashes[each_file_nodot] == local_digest:
+                sys.stderr.write(red + "Warning: File '" + each_file + "' does not match head0a\n" + endcolor)
+                syslog.syslog(syslog.LOG_INFO, "File '" + each_file + "' does not match head0a")
+            
+        except KeyError:
+            sys.stdout.write("No hash of file '" + each_file + "' found for head0a, cannot compare against local\n")
+        
+    
+    each_file_handle.close()
+    
+    
+new_head_clusman_data["file_hashes"] = local_file_hashes
+
 
     
 # Report that we've now checked ourself
@@ -394,14 +476,14 @@ for line in bpstat_out.split(os.linesep):
                 ssh.load_system_host_keys()
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 
-                ssh.connect(clusman_host)
+                ssh.connect(main_config["clusman_host"])
                 channel = ssh.get_transport().open_session()
                 
                 stdin = channel.makefile("wb", 1024)
                 stdout = channel.makefile("rb", 1024)
                 stderr = channel.makefile_stderr("rb", 1024)
                 
-                channel.exec_command(pbsnodes + " -c n" + str(node) + "; exit $?")
+                channel.exec_command(main_config["pbsnodes"] + " -c n" + str(node) + "; exit $?")
                 
                 # Check for errors
                 err = stderr.read()
@@ -423,7 +505,7 @@ for line in bpstat_out.split(os.linesep):
                 ssh.close()
                 
             except Exception, err:
-                sys.stderr.write(red + "Failed to online node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n" + endcolor)
+                sys.stderr.write(red + "Failed to online node with `pbsnodes` on " + main_config["clusman_host"] + ": " + str(err) + "\n" + endcolor)
             
             new_compute_data["state"] = "up"
             
@@ -541,14 +623,14 @@ for line in bpstat_out.split(os.linesep):
                     ssh.load_system_host_keys()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-                    ssh.connect(clusman_host)
+                    ssh.connect(main_config["clusman_host"])
                     channel = ssh.get_transport().open_session()
                     
                     stdin = channel.makefile("wb", 1024)
                     stdout = channel.makefile("rb", 1024)
                     stderr = channel.makefile_stderr("rb", 1024)
                     
-                    channel.exec_command(pbsnodes + " -o n" + str(node) + "; exit $?")
+                    channel.exec_command(main_config["pbsnodes"] + " -o n" + str(node) + "; exit $?")
                     
                     # Check for errors
                     err = stderr.read()
@@ -570,7 +652,7 @@ for line in bpstat_out.split(os.linesep):
                     ssh.close()
                         
                 except Exception, err:
-                    sys.stderr.write(red + "Failed to offline node with `pbsnodes` on " + clusman_host + ": " + str(err) + endcolor + "\n")
+                    sys.stderr.write(red + "Failed to offline node with `pbsnodes` on " + main_config["clusman_host"] + ": " + str(err) + endcolor + "\n")
                 
                 new_compute_data["state"] = "orphan"
                 new_compute_data["state_time"] = int(time.time())
@@ -661,14 +743,14 @@ for line in bpstat_out.split(os.linesep):
             ssh.load_system_host_keys()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-            ssh.connect(clusman_host)
+            ssh.connect(main_config["clusman_host"])
             channel = ssh.get_transport().open_session()
             
             stdin = channel.makefile("wb", 1024)
             stdout = channel.makefile("rb", 1024)
             stderr = channel.makefile_stderr("rb", 1024)
             
-            channel.exec_command(pbsnodes + " -q n" + str(node) + "; exit $?")
+            channel.exec_command(main_config["pbsnodes"] + " -q n" + str(node) + "; exit $?")
             
             # Check for errors
             err = stderr.read()
@@ -718,9 +800,9 @@ for line in bpstat_out.split(os.linesep):
             ssh.close()
             
         except Exception, err:
-            sys.stderr.write("Failed to check PBS state node with `pbsnodes` on " + clusman_host + ": " + str(err) + "\n")
+            sys.stderr.write("Failed to check PBS state node with `pbsnodes` on " + main_config["clusman_host"] + ": " + str(err) + "\n")
 
-            syslog.syslog(syslog.LOG_WARNING, "Failed to check PBS state node with `pbsnodes` on " + clusman_host + " for node: " + str(node))
+            syslog.syslog(syslog.LOG_WARNING, "Failed to check PBS state node with `pbsnodes` on " + main_config["clusman_host"] + " for node: " + str(node))
             
             new_compute_data["pbs"] = False
             
