@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4.0.1
-# Last change: Changed how outage durations are displayed
+# Version: 4.1
+# Last change: Removed dropt/tooltip, added info page for each head node
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -205,6 +205,67 @@ def show_node_page(node):
         
     
     return bottle.template("node", node_doc=node_doc, outages=outages)
+    
+    
+    
+    
+    
+# Individual detail page for a node    
+@route("/head/<head>")
+def show_head_page(head):
+    head_doc = db.head_clusman.find_one(
+        {
+            "_id" : head
+        }
+    )
+    
+    # Does the node exist?
+    if head_doc is None:
+        return "No such node"
+    
+    
+    try:
+        # Switch the processes to text rather than bool
+        for process, value in head_doc["processes"].items():
+            if value is True:
+                head_doc["processes"][process] = "ok"
+                
+            else:
+                head_doc["processes"][process] = "down"
+                
+                
+        # Make things pretty...
+        head_doc["last_check"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(head_doc["last_check"]))
+        
+    except KeyError:
+        return "Details missing for " + str(node)
+        
+        
+    # Check for mismatched files
+    head0a_doc = db.head_clusman.find_one(
+        {
+            "_id" : "head0a"
+        },
+        {
+            "file_hashes" : 1,
+            "_id" : 0
+        }
+    )
+    
+    bad_files = []
+    if head0a_doc is not None:
+        for each_file in head0a_doc["file_hashes"]:
+            try:
+                if not head0a_doc["file_hashes"][each_file] == head_doc["file_hashes"][each_file]:
+                    file_name_with_dots = re.sub(r"\[DOT\]", ".", each_file)
+                    
+                    bad_files.append(file_name_with_dots)
+            
+            except KeyError:
+                pass
+    
+    
+    return bottle.template("head", head_doc=head_doc, bad_files=bad_files)
 
 
 
@@ -326,15 +387,11 @@ def index():
 
 
     # Master Summary
-    index_page.append("<td style=\"\"><span class='dropt'>Head0a<span>\n")
+    index_page.append("<td><a href=\"/beomon/head/head0a\">Head0a</a></td>\n")
     master_info = db.head_clusman.find_one({"_id" : "head0a"})
 
     if master_info is None:
         index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-        
-    else:
-        index_page.append(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
-        index_page.append("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
 
     if master_info is not None:
         if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
@@ -364,15 +421,11 @@ def index():
 
 
     # Master Summary
-    index_page.append("<td><span class='dropt'>Head0b<span>\n")
+    index_page.append("<td><a href=\"/beomon/head/head0b\">Head0b</a>\n")
     master_info = db.head_clusman.find_one({"_id" : "head0b"})
 
     if master_info is None:
         index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-        
-    else:
-        index_page.append(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
-        index_page.append("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
 
     if master_info is not None:
         if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
@@ -394,13 +447,7 @@ def index():
     if num_node_docs_down == 0:
         index_page.append("<td>0</td>\n")
     else:
-        downs = list()
-        
-        for node_doc in db.compute.find({ "state" : "down" }, { "_id" : 1 }):
-            downs.append(node_doc["_id"])
-        
-        index_page.append("<td><span style='color:red' class='dropt'>" + str(num_node_docs_down) + \
-        "<span>" + str(sorted(downs)) + "</span></span></td>\n")
+        index_page.append("<td><span style='color:red'>" + str(num_node_docs_down) + "</td>")
 
     index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
@@ -412,15 +459,11 @@ def index():
 
 
     # Master Summary
-    index_page.append("<td><span class='dropt'>Head1a<span>\n")
+    index_page.append("<td><a href=\"/beomon/head/head1a\">Head1a</a>\n")
     master_info = db.head_clusman.find_one({"_id" : "head1a"})
 
     if master_info is None:
         index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-        
-    else:
-        index_page.append(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
-        index_page.append("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
 
     if master_info is not None:
         if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
@@ -442,13 +485,7 @@ def index():
     if num_node_docs_error == 0:
         index_page.append("<td>0</td>\n")
     else:
-        erroreds = list()
-        
-        for node_doc in db.compute.find({ "state" : "error" }, { "_id" : 1 }):
-            erroreds.append(node_doc["_id"])
-        
-        index_page.append("<td><span style='color:red' class='dropt'>" + str(num_node_docs_error) + \
-        "<span>" + str(sorted(erroreds)) + "</span></span></td>\n")
+        index_page.append("<td><span style='color:red'>" + str(num_node_docs_error) + "</td>")
 
     index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
@@ -460,15 +497,11 @@ def index():
 
 
     # Master Summary
-    index_page.append("<td><span class='dropt'>Head1b<span>\n")
+    index_page.append("<td><a href=\"/beomon/head/head1b\">Head1b</a>\n")
     master_info = db.head_clusman.find_one({"_id" : "head1b"})
 
     if master_info is None:
         index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-        
-    else:
-        index_page.append(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
-        index_page.append("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
 
     if master_info is not None:
         if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
@@ -491,13 +524,7 @@ def index():
         index_page.append("<td>0</td>\n")
         
     else:
-        bootings = list()
-        
-        for node_doc in db.compute.find({ "state" : "boot" }, { "_id" : 1 }):
-            bootings.append(node_doc["_id"])
-        
-        index_page.append("<td><span style='color:red' class='dropt'>" + str(num_node_docs_boot) + \
-        "<span>" + str(sorted(bootings)) + "</span></span></td>\n")
+        index_page.append("<td><span style='color:red'>" + str(num_node_docs_boot) + "</td>")
 
     index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
@@ -509,15 +536,11 @@ def index():
 
 
     # Master Summary
-    index_page.append("<td><span class='dropt'>Head2a<span>\n")
+    index_page.append("<td><a href=\"/beomon/head/head2a\">Head2a</a>\n")
     master_info = db.head_clusman.find_one({"_id" : "head2a"})
 
     if master_info is None:
         index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-        
-    else:
-        index_page.append(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
-        index_page.append("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
 
     if master_info is not None:
         if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
@@ -540,13 +563,7 @@ def index():
         index_page.append("<td>0</td>\n")
         
     else:
-        orphans = list()
-        
-        for node_doc in db.compute.find({ "state" : "orphan" }, { "_id" : 1 }):
-            orphans.append(node_doc["_id"])
-        
-        index_page.append("<td><span style='color:red' class='dropt'>" + str(num_node_docs_orphan) + \
-        "<span>" + str(sorted(orphans)) + "</span></span></td>\n")
+        index_page.append("<td><span style='color:red'>" + str(num_node_docs_orphan) + "</td>")
         
     index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
 
@@ -558,15 +575,11 @@ def index():
 
 
     # Master Summary
-    index_page.append("<td><span class='dropt'>Head2b<span>\n")
+    index_page.append("<td><a href=\"/beomon/head/head2b\">Head2b</a>\n")
     master_info = db.head_clusman.find_one({"_id" : "head2b"})
 
     if master_info is None:
         index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-        
-    else:
-        index_page.append(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
-        index_page.append("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
 
     if master_info is not None:
         if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
@@ -604,15 +617,11 @@ def index():
 
 
     # Master Summary
-    index_page.append("<td><span class='dropt'>Head3a<span>\n")
+    index_page.append("<td><a href=\"/beomon/head/head3a\">Head3a</a>\n")
     master_info = db.head_clusman.find_one({"_id" : "head3a"})
 
     if master_info is None:
         index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-        
-    else:
-        index_page.append(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
-        index_page.append("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
 
     if master_info is not None:
         if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
@@ -650,15 +659,11 @@ def index():
 
 
     # Master Summary
-    index_page.append("<td><span class='dropt'>Head3b<span>\n")
+    index_page.append("<td><a href=\"/beomon/head/head3b\">Head3b</a>\n")
     master_info = db.head_clusman.find_one({"_id" : "head3b"})
 
     if master_info is None:
         index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-        
-    else:
-        index_page.append(master_info["compute_node_class"] + "<br>\nPrimary: " + master_info["primary_of"] + "<br>\nSecondary: " + master_info["secondary_of"] + "<br>\n")
-        index_page.append("Last Node Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(master_info["last_check"])) + "</span></span></td>\n")
 
     if master_info is not None:
         if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
@@ -805,9 +810,7 @@ def index():
             index_page.append("<td>up</td>\n")
             
         else:
-            index_page.append("<td><span style='font-weight:bold;' class='dropt'>" + node_doc["state"] + "<span>Since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"])) + "</span></span></td>\n")
-            
-            for _ in range(11): index_page.append("<td></td>")
+            index_page.append("<td colspan='12'><span style='font-weight:bold;'>" + node_doc["state"] + " since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"])) + "</span></td>\n")
             
             continue
             
@@ -934,7 +937,6 @@ def index():
     # Footer
     index_page.append("""    </tbody>
     </table>
-    <br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
     <script src="/static/jquery.stickytableheaders.js" type="text/javascript"></script> 
 
     <script type="text/javascript">

@@ -2,8 +2,8 @@
  * Description: Beomon status viewer's CSS
  * Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
  * Derived from unlicensed work by Adam Cerini of the University of Pittsburgh
- * Version: 2.1.1
- * Last change: Changed the summary table to work better with smaller resolutions and window resizes
+ * Version: 2.1.2
+ * Last change: Removed dropt class
 */
 
 
@@ -26,22 +26,6 @@ body {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 20px;
     color: #F6F2F2;
-}
-
-
-span.dropt:hover {
-    text-decoration: none; background: #ffffff; z-index: 6;
-}
-
-span.dropt span {
-    position: absolute; left: -99999px;
-    margin: 20px 0 0 0px; padding: 3px 3px 3px 3px;
-    border-style: solid; border-color: black; border-width: 1px; z-index: 6;
-}
-
-span.dropt:hover span {
-    left: 2%; background: whitesmoke;
-    width: 350px;
 }
 
 
