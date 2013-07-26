@@ -1,9 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.3
-# Last change: Added a feature to verify local config files match agaisnt head0a's config files
-# and moved to the ConfigParser module
+# Version: 2.3.1
+# Last change: Fixed a bug where head0a's file hash data does not exist
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -248,7 +247,11 @@ head0a_doc = db.head_clusman.find_one(
     }
 )
 
-head0a_file_hashes = head0a_doc["file_hashes"]
+if head0a_doc is None:
+    head0a_file_hashes = None
+    
+else:
+    head0a_file_hashes = head0a_doc.get("file_hashes")
 
 
 local_file_hashes = {}
@@ -287,7 +290,7 @@ for _, each_file in hash_files.items():
     
     
     # Does the local digest match head0a's?
-    if not hostname == "head0a.frank.sam.pitt.edu":
+    if head0a_file_hashes is not None and not hostname == "head0a.frank.sam.pitt.edu":
         try:
             if not head0a_file_hashes[each_file_nodot] == local_digest:
                 sys.stderr.write(red + "Warning: File '" + each_file + "' does not match head0a\n" + endcolor)
