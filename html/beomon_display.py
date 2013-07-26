@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4.1
-# Last change: Removed dropt/tooltip, added info page for each head node
+# Version: 4.1.1
+# Last change: Changed to down/error/boot text a bit
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -810,7 +810,7 @@ def index():
             index_page.append("<td>up</td>\n")
             
         else:
-            index_page.append("<td colspan='12'><span style='font-weight:bold;'>" + node_doc["state"] + " since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"])) + "</span></td>\n")
+            index_page.append("<td colspan='12'><span style='font-weight:bold;'>" + "In state '" + node_doc["state"] + "' since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"])) + "</span></td>\n")
             
             continue
             
