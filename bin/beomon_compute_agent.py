@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.1.1
-# Last change: Fixed a bug where stale data was being written to the DB in daemon mode
+# Version: 2.1.2
+# Last change: Moved to the ConfigParser module
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -13,19 +13,13 @@
 
 
 
-import sys, os, re, pymongo, subprocess, time, syslog, signal
+import sys, os, re, pymongo, subprocess, time, syslog, signal, ConfigParser
 from optparse import OptionParser
 from multiprocessing import cpu_count
 from string import ascii_lowercase
 
 
 
-mongo_host = "clusman.frank.sam.pitt.edu"
-ibv_devinfo = "/usr/bin/ibv_devinfo"
-ipmitool = "/usr/bin/ipmitool"
-lsmod = "/sbin/lsmod"
-dmidecode = "/usr/sbin/dmidecode"
-deviceQuery = "/opt/sam/cuda/4.0/cuda/bin/deviceQuery"
 new_compute_data = {}
 red = "\033[31m"
 endcolor = '\033[0m'
@@ -48,6 +42,18 @@ parser.add_option(
 
 
 
+
+
+# Read the config file
+config = ConfigParser.ConfigParser()
+config.read("/opt/sam/beomon/etc/beomon.conf")
+
+main_config = dict(config.items("main"))
+
+
+
+
+
 # Connect to the DB
 def connect_mongo():
     # Returns the db object
@@ -60,7 +66,7 @@ def connect_mongo():
         
     # Open a DB connection
     try:
-        mongo_client = pymongo.MongoClient(mongo_host)
+        mongo_client = pymongo.MongoClient(main_config["mongo_host"])
         
         db = mongo_client.beomon
         
@@ -103,6 +109,8 @@ signal.signal(signal.SIGALRM, alarm_handler)
 
 # Prepare syslog
 syslog.openlog(os.path.basename(sys.argv[0]), syslog.LOG_NOWAIT, syslog.LOG_DAEMON)
+
+
 
 
 
@@ -179,7 +187,7 @@ def infiniband_check(db):
         
         try:
             with open(os.devnull, "w") as devnull:
-                ib_info = subprocess.Popen([ibv_devinfo], stdin=None, stdout=subprocess.PIPE, stderr=devnull)
+                ib_info = subprocess.Popen([main_config["ibv_devinfo"]], stdin=None, stdout=subprocess.PIPE, stderr=devnull)
                 out = ib_info.communicate()[0]
                 
                 signal.alarm(0)
@@ -243,7 +251,7 @@ def check_tempurature(db):
         signal.alarm(30)
         
         with open(os.devnull, "w") as devnull:
-            info = subprocess.Popen([ipmitool + " sensor get '" + sensor_name + "'"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=True)
+            info = subprocess.Popen([main_config["ipmitool"] + " sensor get '" + sensor_name + "'"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=True)
             out = info.communicate()[0]
             
             signal.alarm(0)
@@ -444,7 +452,7 @@ def get_ram_amount(db):
     
     try:
         with open(os.devnull, "w") as devnull:
-            info = subprocess.Popen([dmidecode, "--type", "memory"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
+            info = subprocess.Popen([main_config["dmidecode"], "--type", "memory"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
             out = info.communicate()[0]
             
             signal.alarm(0)
@@ -503,12 +511,12 @@ def get_gpu_info(db):
         with open(os.devnull, "w") as devnull:
             # Add a library path deviceQuery needs
             try:
-                os.environ['LD_LIBRARY_PATH'] += ":/opt/sam/cuda/4.0/cuda/lib64"
+                os.environ['LD_LIBRARY_PATH'] += ":" + main_config["devicequery_lib"]
                 
             except KeyError:
-                os.environ['LD_LIBRARY_PATH'] = ":/opt/sam/cuda/4.0/cuda/lib64"
+                os.environ['LD_LIBRARY_PATH'] = ":" + main_config["devicequery_lib"]
                 
-            info = subprocess.Popen([deviceQuery], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=devnull, shell=True)
+            info = subprocess.Popen([main_config["devicequery"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=devnull, shell=True)
             out = info.communicate("\n")[0]
             
             signal.alarm(0)
@@ -561,7 +569,7 @@ def get_gpu_info(db):
         sys.stdout.write(red + "Failed to check for GPU, process timed out.\n" + endcolor)
         
     except Exception as err:
-        sys.stderr.write(red + "Failed to check for GPU, process failed: " + str(err) + endcolor)
+        sys.stderr.write(red + "Failed to check for GPU, process failed: " + str(err) + endcolor + "\n")
             
         
 
@@ -573,7 +581,7 @@ def get_seral_number(db):
     
     try:
         with open(os.devnull, "w") as devnull:
-            info = subprocess.Popen([dmidecode, "-s", "system-serial-number"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
+            info = subprocess.Popen([main_config["dmidecode"], "-s", "system-serial-number"], stdin=None, stdout=subprocess.PIPE, stderr=devnull, shell=False)
             out = info.communicate()[0]
             
             signal.alarm(0)
