@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.3.2
-# Last change: Added new compute nodes, fixed rack location to C-1 from C-0, removed old head nodes
+# Version: 2.3.3
+# Last change: Add alert when a mismatched configuration file is found
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -243,6 +243,7 @@ else:
 local_file_hashes = {}
 
 # Loop through each file we need to hash
+found_mismatched_file = False
 for _, each_file in hash_files.items():
     try:
         each_file_handle = open(each_file, "rb")
@@ -281,6 +282,8 @@ for _, each_file in hash_files.items():
             if not head0a_file_hashes[each_file_nodot] == local_digest:
                 sys.stderr.write(red + "Warning: File '" + each_file + "' does not match head0a\n" + endcolor)
                 syslog.syslog(syslog.LOG_INFO, "File '" + each_file + "' does not match head0a")
+                
+                found_mismatched_file = True
             
         except KeyError:
             sys.stdout.write("No hash of file '" + each_file + "' found for head0a, cannot compare against local\n")
@@ -290,6 +293,10 @@ for _, each_file in hash_files.items():
     
     
 new_head_clusman_data["file_hashes"] = local_file_hashes
+
+
+if found_mismatched_file is True:
+    syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: One or more configuration files do not match head0a")
 
 
     
