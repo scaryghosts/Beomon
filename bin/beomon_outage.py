@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Show when compute nodes were down
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1
-# Last change: Added node 238 to the skip list
+# Version: 1.1.1
+# Last change: Changed max node number to 384
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -94,7 +94,7 @@ except Exception as err:
 # Should we get details on just one node or all of them?
 if options.specific_node is None:
     range_low = 0
-    range_high = 379
+    range_high = 384
     
 else:
     range_low = options.specific_node
