@@ -1,8 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4.1.1
-# Last change: Changed to down/error/boot text a bit
+# Version: 4.1.2
+# Last change: Moved to the ConfigParser module, fixed a bug in the outage view that caused infinate looping
+# when the earliest 'down' time was ahead of the earliest 'up' time
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -15,14 +16,10 @@
 
 import sys
 sys.path.append("/opt/sam/beomon/bin")
-import os, re, pymongo, time, locale, signal, subprocess
+import os, re, pymongo, time, locale, signal, subprocess, ConfigParser
 import bottle
 from bottle import Bottle, run, template, route
 from optparse import OptionParser
-
-
-
-mongo_host = "clusman.frank.sam.pitt.edu"
 
 
 
@@ -49,6 +46,16 @@ def filesystem_info(filesystem):
             continue
         
         return line.split()
+        
+        
+        
+        
+        
+# Read the config file
+config = ConfigParser.ConfigParser()
+config.read("/opt/sam/beomon/etc/beomon.conf")
+
+main_config = dict(config.items("main"))
 
             
             
@@ -63,7 +70,7 @@ dbpasshandle.close()
     
 # Open a DB connection
 try:
-    mongo_client = pymongo.MongoClient(mongo_host)
+    mongo_client = pymongo.MongoClient(main_config["mongo_host"])
 
     db = mongo_client.beomon
     
@@ -127,6 +134,15 @@ def show_node_page(node):
     
     down_times = node_doc.get("down_times")
     up_times = node_doc.get("up_times")
+    
+    
+    # Unique
+    try:
+        down_times = set(down_times)
+        up_times = set(up_times)
+        
+    except:
+        pass
             
 
     if down_times is not None or up_times is not None:
@@ -182,12 +198,9 @@ def show_node_page(node):
                 outage_details["up"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_up)) + ""
                 up_times.remove(min_up)
             
-            elif min_down < min_up:
+            else:
                 outage_details["up"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_up)) + ""
                 up_times.remove(min_up)
-                
-            else:
-                outage_details["up"] = "Unknown"
                 
                 
                 

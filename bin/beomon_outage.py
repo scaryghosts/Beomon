@@ -1,8 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Show when compute nodes were down
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1.1
-# Last change: Changed max node number to 384
+# Version: 1.1.2
+# Last change: Moved to the ConfigParser module, fixed a bug that caused infinate looping
+# when the earliest 'down' time was ahead of the earliest 'up' time
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -13,12 +14,11 @@
 
 
 
-import sys, os, pymongo, time
+import sys, os, pymongo, time, ConfigParser
 from optparse import OptionParser
 
 
 
-mongo_host = "clusman.frank.sam.pitt.edu"
 red = "\033[31m"
 endcolor = '\033[0m' # end color
 
@@ -61,6 +61,16 @@ if options.specific_node is not None:
     except ValueError:
         sys.stderr.write(red + "Invalid node specified: " + specific_node + "\n" + endcolor)
         sys.exit(1)
+        
+        
+        
+        
+        
+# Read the config file
+config = ConfigParser.ConfigParser()
+config.read("/opt/sam/beomon/etc/beomon.conf")
+
+main_config = dict(config.items("main"))
 
     
 
@@ -75,7 +85,7 @@ dbpasshandle.close()
     
 # Open a DB connection
 try:
-    mongo_client = pymongo.MongoClient(mongo_host)
+    mongo_client = pymongo.MongoClient(main_config["mongo_host"])
 
     db = mongo_client.beomon
     
@@ -133,6 +143,15 @@ for node in xrange(range_low, range_high):
 
     down_times = node_db_info.get("down_times")
     up_times = node_db_info.get("up_times")
+    
+    
+    # Unique
+    try:
+        down_times = set(down_times)
+        up_times = set(up_times)
+        
+    except:
+        pass
             
 
     if down_times is None and up_times is None:
@@ -170,29 +189,22 @@ for node in xrange(range_low, range_high):
         if options.daily is True:
             if min_down is not None and time.time() - min_down > (60 * 60 * 24):
                 down_times.remove(min_down)
-                min_down = None
+                continue
                 
             if min_up is not None and time.time() - min_up > (60 * 60 * 24):
                 up_times.remove(min_up)
-                min_up = None
+                continue
                 
         elif options.weekly is True:
             if min_down is not None and time.time() - min_down > (60 * 60 * 24 * 7):
-                down_times.remove(min_down)
-                min_down = None
+                continue
                 
             if min_up is not None and time.time() - min_up > (60 * 60 * 24 * 7):
                 up_times.remove(min_up)
-                min_up = None
+                continue
             
             
             
-        # Do we have anything to look at this iteration?
-        if min_down is None and min_up is None:
-            continue
-        
-        
-        
         # Print the down time
         if min_down is None:
             sys.stdout.write("\n    " + "Down: Unknown\n")
@@ -217,14 +229,11 @@ for node in xrange(range_low, range_high):
         elif min_down is None:
             sys.stdout.write("    " + "Up: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_up)) + "\n")
             up_times.remove(min_up)
-        
-        elif min_down < min_up:
-            sys.stdout.write("    " + "Up: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_up)) + "\n")
-            up_times.remove(min_up)
             
         else:
-            sys.stdout.write("    " + "Up: Unknown\n")
-            
+            sys.stdout.write("    " + "Up: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_up)) + "\n")
+            up_times.remove(min_up)
+
             
             
         # Print the outage duration
