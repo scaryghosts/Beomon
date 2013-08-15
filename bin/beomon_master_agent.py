@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.3.1
-# Last change: Fixed a bug where head0a's file hash data does not exist
+# Version: 2.3.2
+# Last change: Added new compute nodes, fixed rack location to C-1 from C-0, removed old head nodes
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -158,21 +158,7 @@ del processes
 
     
 # Determine our partner and note what nodes we are responible for
-if hostname == "headnode0.frank.sam.pitt.edu":
-    partner = "headnode1.frank.sam.pitt.edu"
-    
-    new_head_clusman_data["compute_node_class"] = "x"
-    new_head_clusman_data["primary_of"] = "x"
-    new_head_clusman_data["secondary_of"] = "x"
-    
-elif hostname == "headnode1.frank.sam.pitt.edu":
-    partner = "headnode0.frank.sam.pitt.edu"
-    
-    new_head_clusman_data["compute_node_class"] = "x"
-    new_head_clusman_data["primary_of"] = "x"
-    new_head_clusman_data["secondary_of"] = "x"
-    
-elif hostname == "head0a.frank.sam.pitt.edu":
+if hostname == "head0a.frank.sam.pitt.edu":
     partner = "head0b.frank.sam.pitt.edu"
     
     new_head_clusman_data["compute_node_class"] = "Original Frank and Fermi Penguin"
@@ -416,46 +402,52 @@ for line in bpstat_out.split(os.linesep):
     
     # Note the rack location
     if node in range(0, 4):
-        new_compute_data["rack"] = "C-0-2"
+        new_compute_data["rack"] = "C-1-2"
         
     elif node in range(4, 14):
-        new_compute_data["rack"] = "C-0-4"
+        new_compute_data["rack"] = "C-1-4"
         
     elif node in range(14, 53):
-        new_compute_data["rack"] = "C-0-3"
+        new_compute_data["rack"] = "C-1-3"
         
     elif node in range(53, 59):
-        new_compute_data["rack"] = "C-0-4"
+        new_compute_data["rack"] = "C-1-4"
         
     elif node in range(59, 113):
-        new_compute_data["rack"] = "C-0-20"
+        new_compute_data["rack"] = "C-1-20"
         
     elif node in range(113, 173):
-        new_compute_data["rack"] = "C-0-19"
+        new_compute_data["rack"] = "C-1-19"
         
     elif node in range(173, 177):
-        new_compute_data["rack"] = "C-0-20"
+        new_compute_data["rack"] = "C-1-20"
         
     elif node in range(177, 211):
-        new_compute_data["rack"] = "C-0-18"
+        new_compute_data["rack"] = "C-1-18"
         
     elif node in range(211, 242):
-        new_compute_data["rack"] = "C-0-17"
+        new_compute_data["rack"] = "C-1-17"
 
     elif node == 242:
-        new_compute_data["rack"] = "C-0-2"
+        new_compute_data["rack"] = "C-1-2"
         
     elif node in range(243, 284):
-        new_compute_data["rack"] = "C-0-21"
+        new_compute_data["rack"] = "C-1-21"
         
     elif node in range(284, 325):
-        new_compute_data["rack"] = "C-0-22"
+        new_compute_data["rack"] = "C-1-22"
         
     elif node in range(325, 351):
-        new_compute_data["rack"] = "C-0-23"
+        new_compute_data["rack"] = "C-1-23"
         
     elif node in range(351, 379):
-        new_compute_data["rack"] = "C-0-24"
+        new_compute_data["rack"] = "C-1-24"
+        
+    elif node in range(379, 383):
+        new_compute_data["rack"] = "C-1-21"
+        
+    elif node in range(383, 385):
+        new_compute_data["rack"] = "C-1-22"
         
     else:
         new_compute_data["rack"] = "unknown"

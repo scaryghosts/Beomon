@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.1.2
-# Last change: Moved to the ConfigParser module
+# Version: 2.1.3
+# Last change: Adding new compute nodes
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -175,7 +175,7 @@ def check_moab(db):
 # Infiniband
 def infiniband_check(db):
     # Which nodes to skip
-    ib_skip_ranges = [(4,11), (40,52), (59,66), (242,242), (283,284)]
+    ib_skip_ranges = [(4,11), (40,52), (59,66), (242,242), (283,284), (379,384)]
     
     if any(lower <= int(node) <= upper for (lower, upper) in ib_skip_ranges):
         sys.stdout.write("Infiniband: n/a\n")
@@ -511,10 +511,10 @@ def get_gpu_info(db):
         with open(os.devnull, "w") as devnull:
             # Add a library path deviceQuery needs
             try:
-                os.environ['LD_LIBRARY_PATH'] += ":" + main_config["devicequery_lib"]
+                os.environ["LD_LIBRARY_PATH"] += ":" + main_config["devicequery_lib"]
                 
             except KeyError:
-                os.environ['LD_LIBRARY_PATH'] = ":" + main_config["devicequery_lib"]
+                os.environ["LD_LIBRARY_PATH"] = ":" + main_config["devicequery_lib"]
                 
             info = subprocess.Popen([main_config["devicequery"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=devnull, shell=True)
             out = info.communicate("\n")[0]
