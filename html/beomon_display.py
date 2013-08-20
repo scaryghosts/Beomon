@@ -1,9 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4.1.2
-# Last change: Moved to the ConfigParser module, fixed a bug in the outage view that caused infinate looping
-# when the earliest 'down' time was ahead of the earliest 'up' time
+# Version: 4.2
+# Last change: Add zombie processes to the head node page
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -253,8 +252,12 @@ def show_head_page(head):
     except KeyError:
         return "Details missing for " + str(node)
         
-        
-    # Check for mismatched files
+    
+    
+    #
+    # Get any mismatched files
+    #
+    
     head0a_doc = db.head_clusman.find_one(
         {
             "_id" : "head0a"
@@ -276,9 +279,16 @@ def show_head_page(head):
             
             except KeyError:
                 pass
+            
+            
+
+    # Do we have any zombies?        
+    if head_doc.get("zombies") is None:
+        head_doc["zombies"] = []
     
     
-    return bottle.template("head", head_doc=head_doc, bad_files=bad_files)
+    
+    return bottle.template("head", head_doc=head_doc, bad_files=bad_files, zombies=head_doc["zombies"])
 
 
 

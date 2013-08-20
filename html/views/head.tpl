@@ -16,7 +16,7 @@
         Last Check-in: {{ head_doc["last_check"] }}<br>
         Processes:<br>
         %for process, value in head_doc["processes"].items():
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ process }}: {{ value }}<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ process }}: {{ value }}<br>
         %end
         </p>
 
@@ -24,11 +24,27 @@
         <p>
         <span style="font-weight:bold">File Check:</span><br>
         %if len(bad_files) == 0:
-                All checked files match head0a<br>
+            All checked files match head0a.<br>
         %else:
-                %for each_file in bad_files:
-                        Does not match head0a: {{ each_file }}<br>
-                %end
+            %for each_file in bad_files:
+                Does not match head0a: {{ each_file }}<br>
+            %end
+        %end
+        </p>
+        
+        
+        <p>
+        <span style="font-weight:bold">Zombie Processes:</span><br>
+        %if len(head_doc["zombies"]) == 0:
+            No zombies found.
+        %else:
+            %for zombie in head_doc["zombies"]:
+                Node: {{ zombie["node"] }}<br>
+                PID: {{ zombie["PID"] }}<br>
+                User: {{ zombie["user"] }}<br>
+                Command: {{ zombie["command"] }}<br>
+                <br>
+            %end
         %end
         </p>
     </body>
