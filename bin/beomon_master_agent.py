@@ -1,8 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.3.3
-# Last change: Add alert when a mismatched configuration file is found
+# Version: 2.3.4
+# Last change: Consider a node "down" instead of "orphan" until 7 minutes have 
+# elapsed since we first saw it "down" (to work around an issue with beooutage)
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -18,7 +19,6 @@ from optparse import OptionParser
 
 
 
-bpstat = "/usr/bin/bpstat"
 red = "\033[31m"
 endcolor = '\033[0m' # end color
 nodes = ""
@@ -326,7 +326,7 @@ del(new_head_clusman_data)
 # Get the output of beostat and check each node
 #
 try:
-    bpstat_proc = subprocess.Popen([bpstat, "-l", nodes], stdout=subprocess.PIPE, shell=False)
+    bpstat_proc = subprocess.Popen([main_config["bpstat"], "-l", nodes], stdout=subprocess.PIPE, shell=False)
     
     status = bpstat_proc.wait()
     
@@ -550,7 +550,7 @@ for line in bpstat_out.split(os.linesep):
             stdout = channel.makefile("rb", 1024)
             stderr = channel.makefile_stderr("rb", 1024)
             
-            channel.exec_command(bpstat + " " + str(node) + "; exit $?")
+            channel.exec_command(main_config["bpstat"] + " " + str(node) + "; exit $?")
             
             err = stderr.read()
             stderr.close()
@@ -602,8 +602,9 @@ for line in bpstat_out.split(os.linesep):
             sys.stdout.write("State: partnered\n")
             
         
-        # If the node checked in within the last 10 minutes, consider it an orphan
-        elif node_db_info["last_check"] > (int(time.time()) - 600):
+        # If the node checked in within the last 10 minutes AND it has been "down" as far
+        # as the head node knows for at least 7 minutes, consider the node an orphan
+        elif node_db_info["last_check"] > (int(time.time()) - (60 * 10)) and not node_db_info["state_time"] > (int(time.time()) - (60 * 7)) :
             state = "orphan"
             
             num_state["orphan"] += 1
@@ -660,7 +661,8 @@ for line in bpstat_out.split(os.linesep):
                 new_compute_data["state_time"] = int(time.time())
                     
         
-        # The node has not checked in within the last 10 minutes, it's down
+        # The node has not checked in within the last 10 minutes OR has been "down" as far
+        # as the head node knows for less than 7 minutes, consider it down
         else:
             state = "down"
             
