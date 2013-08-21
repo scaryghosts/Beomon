@@ -1,9 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.3.4
-# Last change: Consider a node "down" instead of "orphan" until 7 minutes have 
-# elapsed since we first saw it "down" (to work around an issue with beooutage)
+# Version: 2.3.5
+# Last change: Log the node state to a file on each run
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -14,7 +13,7 @@
 
 
 
-import sys, os, re, pymongo, subprocess, time, syslog, paramiko, signal, hashlib, ConfigParser
+import sys, os, re, pymongo, subprocess, time, syslog, paramiko, signal, hashlib, ConfigParser, datetime
 from optparse import OptionParser
 
 
@@ -54,11 +53,19 @@ except IndexError:
 
     
     
-    
-    
 hostname = os.uname()[1]
 
 
+
+# Log our activities
+log_file_handle = open("/opt/sam/beomon/log/" + hostname.split(".")[0] + ".log", "a+")
+
+def log_self(message):
+    log_file_handle.write(datetime.datetime.today().strftime("%Y-%m-%d %H:%M:%S") + " : " + message + "\n")
+    
+    
+    
+log_self("- - - Run starting - - -")
 
 
 
@@ -141,8 +148,6 @@ for pid in [pid for pid in os.listdir('/proc') if pid.isdigit()]:
 new_head_clusman_data = {}
 for proc_name in ["beoserv", "bpmaster", "recvstats", "kickbackdaemon"]:
     if "/usr/sbin/" + proc_name in processes:
-        sys.stdout.write("Process " + proc_name + " found\n")
-        
         new_head_clusman_data["processes." + proc_name] = True
         
     else:
@@ -468,9 +473,11 @@ for line in bpstat_out.split(os.linesep):
         
         if node_db_info["state"] == "up":
             sys.stdout.write("State: up - known\n")
+            log_self("Node " + str(node) + " is in state up")
             
         else:    
             sys.stdout.write("State: up - new\n")
+            log_self("Node " + str(node) + " is in state up")
             
             try:
                 ssh = paramiko.SSHClient()
@@ -508,7 +515,7 @@ for line in bpstat_out.split(os.linesep):
                 
             except Exception, err:
                 sys.stderr.write(red + "Failed to online node with `pbsnodes` on " + main_config["clusman_host"] + ": " + str(err) + "\n" + endcolor)
-            
+                
             new_compute_data["state"] = "up"
             
             new_compute_data["state_time"] = int(time.time())
@@ -600,6 +607,7 @@ for line in bpstat_out.split(os.linesep):
             num_state["partnered"] += 1
 
             sys.stdout.write("State: partnered\n")
+            log_self("Node " + str(node) + " is in state partnered")
             
         
         # If the node checked in within the last 10 minutes AND it has been "down" as far
@@ -611,6 +619,7 @@ for line in bpstat_out.split(os.linesep):
             
             if node_db_info["state"] == "orphan":
                 sys.stdout.write(red + "State: orphan - known\n" + endcolor)
+                log_self("Node " + str(node) + " is in state orphan")
                 
                 # If the node has been an orphan more than 7 days, throw an alert
                 if (int(time.time()) - node_db_info["state_time"]) >= 604800:
@@ -619,6 +628,7 @@ for line in bpstat_out.split(os.linesep):
                 
             else:
                 sys.stdout.write(red + "State: orphan - new\n" + endcolor)
+                log_self("Node " + str(node) + " is in state orphan")
                 
                 try:
                     ssh = paramiko.SSHClient()
@@ -670,6 +680,7 @@ for line in bpstat_out.split(os.linesep):
             
             if node_db_info["state"] == "down":
                 sys.stdout.write(red + "State: down - known\n" + endcolor)
+                log_self("Node " + str(node) + " is in state down")
                 
                 ## TODO: Add IPMI's 'chassis power cycle'
                 
@@ -682,6 +693,7 @@ for line in bpstat_out.split(os.linesep):
                 sys.stdout.write(red + "State: down - new\n" + endcolor)
                 
                 syslog.syslog(syslog.LOG_WARNING, "Node " + str(node) + " is not up, state: down")
+                log_self("Node " + str(node) + " is in state down")
                 
                 new_compute_data["state"] = "down"
                 new_compute_data["state_time"] = int(time.time())
@@ -707,6 +719,7 @@ for line in bpstat_out.split(os.linesep):
         
         if node_db_info["state"] == "boot":
             sys.stdout.write("State: boot - known\n")
+            log_self("Node " + str(node) + " is in state boot")
             
             # If the node has been in boot state for more than 2 hours, log an alert
             if int(time.time()) - node_db_info["state_time"] >= (60 * 60 * 2):
@@ -714,6 +727,7 @@ for line in bpstat_out.split(os.linesep):
             
         else:
             sys.stdout.write("State: boot - new\n")
+            log_self("Node " + str(node) + " is in state boot")
             
             new_compute_data["state"] = "boot"
             new_compute_data["state_time"] = int(time.time())
@@ -726,9 +740,11 @@ for line in bpstat_out.split(os.linesep):
         
         if node_db_info["state"] == "error":
             sys.stdout.write(red + "State: error - known\n" + endcolor)
+            log_self("Node " + str(node) + " is in state error")
             
         else:
             sys.stdout.write(red + "State: error - new\n" + endcolor)
+            log_self("Node " + str(node) + " is in state error")
             
             new_compute_data["state"] = "error"
             new_compute_data["state_time"] = int(time.time())
@@ -890,5 +906,11 @@ sys.stdout.write(str(num_state["up"]) + " nodes in state 'up'\n")
 
 
 
-# Close the DB, we're done with it
+log_self("- - - Run completed - - -")
+
+
+
+# Close the DB and logs, we're done with them
 syslog.closelog()
+log_file_handle.close()
+mongo_client.close()
