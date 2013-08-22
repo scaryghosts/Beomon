@@ -1,9 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Show when compute nodes were down
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1.2
-# Last change: Moved to the ConfigParser module, fixed a bug that caused infinate looping
-# when the earliest 'down' time was ahead of the earliest 'up' time
+# Version: 1.1.3
+# Last change: Changed the error when a node is not found in the DB, added a skip for dead node 205
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -117,7 +116,7 @@ for node in xrange(range_low, range_high):
     
     
     # Skip dead nodes
-    if node in [191, 199, 203, 226, 229, 238, 241]:
+    if node in [191, 199, 203, 205, 226, 229, 238, 241]:
         continue
     
 
@@ -136,7 +135,7 @@ for node in xrange(range_low, range_high):
 
     # Catch things that didn't exist in the document
     if node_db_info is None:
-        sys.stderr.write("    " + red + "No such node found: " + str(node) + endcolor + "\n")
+        sys.stderr.write("\n" + red + "No such node found: " + str(node) + endcolor + "\n")
         
         continue
         
