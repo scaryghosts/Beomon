@@ -1,8 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.3.5
-# Last change: Log the node state to a file on each run
+# Version: 2.3.6
+# Last change: Fixed a bug introduced in 2.3.4 where a node jumped between down and orphan states
+# both orphan and down cause a timestampt to be added to the down_times array in the DB
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -347,7 +348,6 @@ except Exception as err:
     
 
 # Loop through bpstat's output for each node
-new_compute_data = {}
 for line in bpstat_out.split(os.linesep):
     # Skip the header
     match_header = re.match("^Node", line)
@@ -610,9 +610,8 @@ for line in bpstat_out.split(os.linesep):
             log_self("Node " + str(node) + " is in state partnered")
             
         
-        # If the node checked in within the last 10 minutes AND it has been "down" as far
-        # as the head node knows for at least 7 minutes, consider the node an orphan
-        elif node_db_info["last_check"] > (int(time.time()) - (60 * 10)) and not node_db_info["state_time"] > (int(time.time()) - (60 * 7)) :
+        # If the node checked in within the last 10 minutes, consider the node an orphan
+        elif node_db_info["last_check"] > (int(time.time()) - (60 * 10)):
             state = "orphan"
             
             num_state["orphan"] += 1
@@ -669,6 +668,19 @@ for line in bpstat_out.split(os.linesep):
                 
                 new_compute_data["state"] = "orphan"
                 new_compute_data["state_time"] = int(time.time())
+                
+                # Update the compute collection
+                db.compute.update(
+                    {
+                        "_id" : node
+                    },
+                    {
+                        "$push" : {
+                                "down_times" : int(time.time())
+                            }
+                    },
+                    upsert = True,
+                )
                     
         
         # The node has not checked in within the last 10 minutes OR has been "down" as far
