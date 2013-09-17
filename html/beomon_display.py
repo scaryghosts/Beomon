@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4.2
-# Last change: Add zombie processes to the head node page
+# Version: 4.2.1
+# Last change: Added a row to show the total GPU RAM
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -669,7 +669,7 @@ def index():
         except KeyError:
             pass
             
-    index_page.append("<tr><td>Total GPU Cores:</td>\n")
+    index_page.append("<tr><td>Total GPU Cores</td>\n")
     index_page.append("<td>" + locale.format("%0.0f", gpu_cores_total, grouping=True) + "</td>\n")
 
     index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
@@ -711,7 +711,7 @@ def index():
         except KeyError:
             pass
             
-    index_page.append("<tr><td>Total RAM </td>\n")
+    index_page.append("<tr><td>Total System RAM </td>\n")
     index_page.append("<td>" + locale.format("%0.2f", ram_total / float(1024), grouping=True) + " TB</td>\n")
 
     index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
@@ -728,13 +728,46 @@ def index():
     # Master Summary
     index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
     index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
-
-
+    
+    
 
     #
     # Row 10
     #
 
+    # Compute Summary
+    gpu_ram_total = 0
+    for node_doc in db.compute.find({}, { "gpu" : 1 }):
+        try:
+            gpu_ram_total += node_doc["gpu"]["ram_size"]
+            
+        except KeyError:
+            pass
+            
+    index_page.append("<tr><td>Total GPU RAM </td>\n")
+    index_page.append("<td>" + locale.format("%0.2f", gpu_ram_total, grouping=True) + " GB</td>\n")
+
+    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+
+
+    # Storage Summary
+    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+
+    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+
+
+    # Master Summary
+    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    
+    
+    
+    #
+    # Row 11
+    #
+    
     # Compute Summary
     scratch_total = 0
     for node_doc in db.compute.find().sort("_id", 1):
@@ -748,8 +781,7 @@ def index():
     index_page.append("<td>" + locale.format("%0.2f", scratch_total / float(1024), grouping=True) + " TB</td>\n")
 
     index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
-
-
+    
     # Storage Summary
     index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
     index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
