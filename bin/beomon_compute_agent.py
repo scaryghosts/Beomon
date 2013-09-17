@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.1.3
-# Last change: Adding new compute nodes
+# Version: 2.1.4
+# Last change: Moved to a new Nvidia deviceQuery binary
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -507,69 +507,66 @@ def scratch_size(db):
 def get_gpu_info(db):
     signal.alarm(30)
 
-    try:
-        with open(os.devnull, "w") as devnull:
-            # Add a library path deviceQuery needs
-            try:
-                os.environ["LD_LIBRARY_PATH"] += ":" + main_config["devicequery_lib"]
-                
-            except KeyError:
-                os.environ["LD_LIBRARY_PATH"] = ":" + main_config["devicequery_lib"]
-                
-            info = subprocess.Popen([main_config["devicequery"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=devnull, shell=True)
-            out = info.communicate("\n")[0]
-            
-            signal.alarm(0)
-            
-            gpu_info = {}
-            
-            for line in out.split(os.linesep):
-                line = line.rstrip()
-                
-                # If we don't have a GPU, say so and stop looking
-                if re.search("^cudaGetDeviceCount FAILED", line) is not None:
-                    sys.stdout.write("GPU:\n")
-                    sys.stdout.write("     Cards: 0\n")
-                    
-                    gpu_info["num_cards"] = 0
-                    
-                    new_compute_data["gpu"] = False
-                    
-                    break
-                    
-                # How many cards do we have?
-                if re.search("There are (\d+) devices supporting CUDA", line) is not None:
-                    gpu_info["num_cards"] = int(line.split()[2])
-                    
-                    continue
-                    
-                # How much memory do we have?
-                if re.search("^\s+Total amount of global memory:\s+(\d+) bytes", line) is not None:
-                    gpu_info["ram_size"] = int(round((float(line.split()[5]) / 1024.0 / 1024.0 / 1024.0) * gpu_info["num_cards"], 0))
-                    
-                    continue
-                
-                # How many GPU core do we have?
-                if re.search("^\s+Number of cores:\s+(\d+)", line) is not None:
-                    gpu_info["num_cores"] = int(line.split()[3]) * gpu_info["num_cards"]
-                    
-                    break
-                
-                
-            # Done, print and note our GPU info if we have any
-            if gpu_info["num_cards"] != 0:
-                sys.stdout.write("GPU:\n")
-                sys.stdout.write("     Cards: " + str(gpu_info["num_cards"]) + "\n")
-                sys.stdout.write("     Total RAM Size: " + str(gpu_info["ram_size"]) + " GB\n")
-                sys.stdout.write("     Total GPU Cores: " + str(gpu_info["num_cores"]) + "\n")
-            
-            new_compute_data["gpu"] = gpu_info
-                    
-    except Alarm:
-        sys.stdout.write(red + "Failed to check for GPU, process timed out.\n" + endcolor)
+    #try:
+    with open(os.devnull, "w") as devnull:
+        info = subprocess.Popen([main_config["devicequery"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=devnull, shell=True)
+        out = info.communicate("\n")[0]
         
-    except Exception as err:
-        sys.stderr.write(red + "Failed to check for GPU, process failed: " + str(err) + endcolor + "\n")
+        signal.alarm(0)
+        
+        gpu_info = {}
+        
+        for line in out.split(os.linesep):
+            line = line.rstrip()
+            
+            # If we don't have a GPU, say so and stop looking
+            if re.search("no CUDA-capable device is detected", line) is not None:
+                sys.stdout.write("GPU:\n")
+                #sys.stdout.write("     Cards: 0\n")
+                
+                gpu_info["num_cards"] = 0
+                
+                new_compute_data["gpu"] = False
+                
+                break
+                
+            # How many cards do we have?
+            num_card_match = re.match("^Detected (\d+) CUDA Capable device", line)
+            if num_card_match is not None:
+                gpu_info["num_cards"] = int(num_card_match.group(1))
+                
+                continue
+                
+            # How much memory do we have?
+            ram_size_match = re.match("^\s+Total amount of global memory:\s+\d+ MBytes \((\d+) bytes\)$", line)
+            if ram_size_match is not None:
+                mem_bytes_kb_total = int(ram_size_match.group(1)) * gpu_info["num_cards"]
+                gpu_info["ram_size"] = round(float(mem_bytes_kb_total) / 1024.0 / 1024.0 / 1024.0, 2)
+                
+                continue
+            
+            # How many GPU cores do we have?
+            num_cores_match = re.match(".*:\s+(\d+) CUDA Cores", line)
+            if num_cores_match is not None:
+                gpu_info["num_cores"] = int(num_cores_match.group(1)) * gpu_info["num_cards"]
+                
+                break
+            
+            
+        # Done, print and note our GPU info if we have any
+        if gpu_info["num_cards"] != 0:
+            sys.stdout.write("GPU:\n")
+            sys.stdout.write("     Cards: " + str(gpu_info["num_cards"]) + "\n")
+            sys.stdout.write("     Total RAM Size: " + str(gpu_info["ram_size"]) + " GB\n")
+            sys.stdout.write("     Total GPU Cores: " + str(gpu_info["num_cores"]) + "\n")
+        
+        new_compute_data["gpu"] = gpu_info
+                    
+    #except Alarm:
+        #sys.stdout.write(red + "Failed to check for GPU, process timed out.\n" + endcolor)
+        
+    #except Exception as err:
+        #sys.stderr.write(red + "Failed to check for GPU, process failed: " + str(err) + endcolor + "\n")
             
         
 
