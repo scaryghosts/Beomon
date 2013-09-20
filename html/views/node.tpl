@@ -10,6 +10,62 @@
                                                                                                                                                                                     
     <body>
         <h2>Node {{ node_doc["_id"] }}</h2>
+        
+        <!-- Health information -->
+        <p>
+        %if node_doc["state"] == "up":
+            State: up (since {{ node_doc["state_time"] }})<br>
+            
+        %else:
+            <span style="color:red">State: {{ node_doc["state"] }} (since {{ node_doc["state_time"] }})</span><br>
+        
+        %end
+        
+        
+        %if node_doc["pbs"] is True:
+            PBS: ok<br>
+            
+        %else:
+            <span style="color:red">PBS: fail</span><br>
+        
+        %end
+        
+        
+        %if node_doc["moab"] is True:
+            MOAB: ok<br>
+            
+        %else:
+            <span style="color:red">MOAB: fail</span><br>
+        
+        %end
+        
+        
+        %if node_doc["infiniband"] is True:
+            Infiniband: ok<br>
+            
+        %else:
+            <span style="color:red">Infiniband: fail</span><br>
+        
+        %end
+        
+        
+        %filesystems_all_good = True
+        %for filesystem, state in node_doc["filesystems"].items():
+            %if state is not True:
+                %filesystems_all_good = False
+                
+                <span style="color:red">{{ filesystem }} : fail<br>
+                
+            %end
+        %end
+                
+        %if filesystems_all_good is True:
+            Filesystems: ok<br>
+        %end
+        </p>
+
+        
+        <!-- Basic information of the node -->
         <p>
         CPU:<br>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Type: {{ node_doc["cpu"]["cpu_type"] }}<br>
@@ -32,17 +88,17 @@
         </p>
 
 
-
+        <!-- Outages -->
         <p>
-        <span style="font-weight:bold">Outages:</span><br>
+        Outages:<br>
         %if len(outages) == 0:
-            No outages found.</p>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;No outages found.<br>
 
         %else:
             %for outage in outages:
-                Down: {{ outage["down"] }}<br>
-                Up: {{ outage["up"] }}<br>
-                Duration: {{ outage["outage"] }}<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Down: {{ outage["down"] }}<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Up: {{ outage["up"] }}<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Duration: {{ outage["outage"] }}<br>
                 <br>
             %end
         %end

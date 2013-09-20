@@ -1,8 +1,10 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4.2.1
-# Last change: Added a row to show the total GPU RAM
+# Version: 4.3
+# Last change: Changed filesystem check to just say "ok" if all are mounted
+# rather than listing each filesystem individually and list unmounted files
+# only individual on the node's page rather than the main page
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -99,7 +101,7 @@ def show_node_page(node):
         node = int(node)
         
     except ValueError:
-        return "No such node: " + node
+        return "No such node: " + str(node)
     
     
     node_doc = db.compute.find_one(
@@ -119,6 +121,8 @@ def show_node_page(node):
             node_doc["gpu"]["num_cores"] = locale.format("%0.0f", node_doc["gpu"]["num_cores"], grouping=True)
             
         node_doc["last_check"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["last_check"]))
+        
+        node_doc["state_time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"]))
         
     except KeyError:
         return "Details missing for node " + str(node)
@@ -817,14 +821,7 @@ def index():
                 <th scope="col">PBS</th>
                 <th scope="col">Moab</th>
                 <th scope="col">Infiniband</th>
-                <th scope="col">/data/pkg</th>
-                <th scope="col">/data/sam</th>
-                <th scope="col">/gscratch1</th>
-                <th scope="col">/home</th>
-                <th scope="col">/home1</th>
-                <th scope="col">/home2</th>
-                <th scope="col">/pan</th>
-                <th scope="col">/scratch</th>
+                <th scope="col">Filesystems</th>
             </tr>
         </thead>
         <tbody>
@@ -857,7 +854,7 @@ def index():
         elif "state" not in node_doc:
             index_page.append("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
             
-            for _ in range(11): index_page.append("<td></td>")
+            for _ in range(4): index_page.append("<td></td>")
             
             continue
         
@@ -865,7 +862,7 @@ def index():
             index_page.append("<td>up</td>\n")
             
         else:
-            index_page.append("<td colspan='12'><span style='font-weight:bold;'>" + "In state '" + node_doc["state"] + "' since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"])) + "</span></td>\n")
+            index_page.append("<td colspan='15'><span style='font-weight:bold;'>" + "In state '" + node_doc["state"] + "' since " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["state_time"])) + "</span></td>\n")
             
             continue
             
@@ -878,9 +875,9 @@ def index():
         #
         
         if int(time.time()) - node_doc["last_check"] > 60 * 30:
-            for _ in range(4): index_page.append("<td></td>\n")
+            for _ in range(1): index_page.append("<td></td>\n")
             index_page.append("<td style=\"font-weight:bold;color:red;\">Stale data</td>\n")
-            for _ in range(6): index_page.append("<td></td>\n")
+            for _ in range(2): index_page.append("<td></td>\n")
             
             continue
             
@@ -968,18 +965,17 @@ def index():
             "panasas",
             "scratch",
         ]
-
         
-        for filesystem in sorted(filesystems):
-            if filesystem not in node_doc["filesystems"]:
-                index_page.append("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
+        filesystems_all_good = True
+        for filesystem, state in node_doc["filesystems"].items():
+            if state is not True:
+                filesystems_all_good = False
+                
+        if filesystems_all_good is True:
+            index_page.append("<td>ok</td>\n")
             
-            elif node_doc["filesystems"][filesystem] is True:
-                index_page.append("<td>ok</td>\n")
-            
-            else:
-                index_page.append("<td style=\"font-weight:bold;color:red;\">down</td>\n")
-            
+        else:
+            index_page.append("<td style=\"font-weight:bold;color:red;\">fail</td>\n")
             
             
             
