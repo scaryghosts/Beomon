@@ -21,9 +21,6 @@ to be a possible master of node 10, one master will consider the node
 it up, boot or error.  Otherwise both masters consider it down
 or orphaned when no master is in control.
 
-![Beomon Display](http://www.pitt.edu/~jaw171/beomon/main.jpg)
-![Beomon Display Nodes](http://www.pitt.edu/~jaw171/beomon/nodes.jpg)
-
 License
 -------
 
@@ -32,6 +29,11 @@ Free Software Foundation (FSF), the text of which is available at http://www.fsf
 Use or modification of this software implies your acceptance of this license and its terms.
 This is free software, you are free to change and redistribute it with the terms of the GNU GPL.
 There is NO WARRANTY, not even for FITNESS FOR A PARTICULAR USE to the extent permitted by law.
+
+Screenshots
+-----------
+
+Screenshots are available on [my Web site](http://www.pitt.edu/~jaw171/beomon).
 
 Installation
 ------------
@@ -114,6 +116,11 @@ amount, etc.).  It also displays a summary/status of head nodes and storage.  Th
 It uses style.css and [jquery.stickytableheaders.js](https://github.com/jmosbech/StickyTableHeaders).
 The style.css file is derived from unlicensed work by Adam Cerini of the University of Pittsburgh.  
 The file jquery.stickytableheaders.js is from [Jonas Mosbech](https://github.com/jmosbech).  
+
+
+**beomon_cli.py** displays the status of the cluster in plain text.  When ran
+with no arguements an overall status is printed.  With an arguement of a node
+name (e.g. 'head0a' or 'n17' or '17') the status of that node is printed.
 
 
 **beomon_zombie_catcher.py** will attempt to find processes on compute nodes which are not from a running 
