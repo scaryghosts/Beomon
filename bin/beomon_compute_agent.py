@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.1.4
-# Last change: Moved to a new Nvidia deviceQuery binary
+# Version: 2.1.5
+# Last change: Fixed the GPU detection to handle nodes with no nvidia driver loaded
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -520,9 +520,10 @@ def get_gpu_info(db):
             line = line.rstrip()
             
             # If we don't have a GPU, say so and stop looking
-            if re.search("no CUDA-capable device is detected", line) is not None:
+            if re.search(".*no CUDA-capable device is detected", line) is not None or \
+                re.search(".*CUDA driver version is insufficient for CUDA runtime version", line) is not None:
                 sys.stdout.write("GPU:\n")
-                #sys.stdout.write("     Cards: 0\n")
+                sys.stdout.write("     Cards: 0\n")
                 
                 gpu_info["num_cards"] = 0
                 
