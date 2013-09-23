@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon command line interface
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1
-# Last change: Initial version
+# Version: 1.1
+# Last change: Fixed the output of the list of down, error, and boot nodes
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -82,13 +82,13 @@ if len(sys.argv) == 1:
     nodes_down = []
     
     for node in db.compute.find({ "state" : "down" }, { "_id" : 1} ):
-        nodes_down.append(str(node["_id"]))
+        nodes_down.append(node["_id"])
     
     if len(nodes_down) == 0:
         print "Nodes down: 0"
         
     else:
-        print "Nodes down: " + str(len(nodes_down)) + " (" + str(sorted(nodes_down)).strip('[]') + ")"
+        print "Nodes down: " + str(len(nodes_down)) + " " + str(sorted(nodes_down))
         
     
     
@@ -108,7 +108,7 @@ if len(sys.argv) == 1:
     nodes_error = []
     
     for node in db.compute.find({ "state" : "error" }, { "_id" : 1} ):
-        nodes_error.append(str(node["_id"]))
+        nodes_error.append(node["_id"])
     
     if len(nodes_error) == 0:
         print "Nodes error: 0"
@@ -121,7 +121,7 @@ if len(sys.argv) == 1:
     nodes_boot = []
     
     for node in db.compute.find({ "state" : "boot" }, { "_id" : 1} ):
-        nodes_boot.append(str(node["_id"]))
+        nodes_boot.append(node["_id"])
     
     if len(nodes_boot) == 0:
         print "Nodes boot: 0"
