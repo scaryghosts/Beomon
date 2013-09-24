@@ -1,8 +1,18 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.1.5
-# Last change: Fixed the GPU detection to handle nodes with no nvidia driver loaded
+# Version: 2.2
+# Last change: 
+# * Added a feature to check for missing RAM, CPUs, and GPUs 
+# (compare what the node has now to what it had last time it was checked).
+
+# * Removed useless passing of the db object to most functions.
+
+# * Re-added the try...except code for the GPU check
+
+# * Changed "dict inside a dict" from Mongo syntax to Pythonic syntax
+
+
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -136,7 +146,7 @@ node = int(node)
 #
         
 # Moab
-def check_moab(db):
+def check_moab():
     signal.alarm(30)
     
     try:
@@ -168,12 +178,14 @@ def check_moab(db):
         
         new_compute_data["moab"] = False
         
+    return None
+        
         
 
         
         
 # Infiniband
-def infiniband_check(db):
+def infiniband_check():
     # Which nodes to skip
     ib_skip_ranges = [(4,11), (40,52), (59,66), (242,242), (283,284), (379,384)]
     
@@ -218,12 +230,14 @@ def infiniband_check(db):
             
             new_compute_data["infiniband"] = False
             
+    return None
+            
             
 
 
             
 # Tempurature
-def check_tempurature(db):
+def check_tempurature():
     try:
         sensor_name = ""
         temp = False
@@ -289,12 +303,14 @@ def check_tempurature(db):
         
         new_compute_data["tempurature"] = False
         
+    return None
+        
 
 
         
         
 # Filesystems check
-def check_filesystems(db):
+def check_filesystems():
     filesystems = {
         "/data/pkg" : "datapkg",
         "/data/sam" : "datasam",
@@ -307,19 +323,23 @@ def check_filesystems(db):
     }
     
     sys.stdout.write("Filesystems:\n")
+    
+    new_compute_data["filesystems"] = {}
 
     
     for mount_point in sorted(filesystems.iterkeys()):
         if os.path.ismount(mount_point) is True:
             sys.stdout.write("     " + mount_point + ": ok\n")
             
-            new_compute_data["filesystems." + filesystems[mount_point]] = True
+            new_compute_data["filesystems"][mount_point] = True
             
         else:
             sys.stdout.write(red + "     " + mount_point + ": failed\n" + endcolor)
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has " + mount_point + " in state failed")
             
-            new_compute_data["filesystems." + filesystems[mount_point]] = False
+            new_compute_data["filesystems"][mount_point] = False
+
+    return None
             
         
         
@@ -360,6 +380,8 @@ def check_hyperthreading():
         else:
             sys.stdout.write(red + "Hyperthreading: Error (enabled)\n" + endcolor)
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has hyperthreading enabled")
+            
+    return None
         
         
         
@@ -370,11 +392,13 @@ def check_hyperthreading():
 #    
         
 # CPU info
-def get_cpu_info(db):
+def get_cpu_info():
     # Number of cores
     num_cpu_cores = cpu_count()
     
-    new_compute_data["cpu.cpu_num"] = num_cpu_cores
+    new_compute_data["cpu"] = {}
+    
+    new_compute_data["cpu"]["cpu_num"] = num_cpu_cores
     
     # CPU type
     proc_info_file = open("/proc/cpuinfo", "r")
@@ -387,7 +411,7 @@ def get_cpu_info(db):
         if model_match:
             cpu_type = re.sub("\s+", " ", model_match.group(1))
             
-            new_compute_data["cpu.cpu_type"] = cpu_type
+            new_compute_data["cpu"]["cpu_type"] = cpu_type
             
             break
 
@@ -398,7 +422,7 @@ def get_cpu_info(db):
     if any(lower <= int(node) <= upper for (lower, upper) in [(325,378)]):
         sys.stdout.write("Hyperthreading: n/a\n")
         
-        new_compute_data["cpu.hyperthreading"] = False
+        new_compute_data["cpu"]["hyperthreading"] = False
         
     else:
         proc_info_file = open("/proc/cpuinfo", "r")
@@ -422,30 +446,32 @@ def get_cpu_info(db):
 
 
         if num_cores == num_siblings:
-            new_compute_data["cpu.hyperthreading"] = False
+            new_compute_data["cpu"]["hyperthreading"] = False
             
         else:
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has hyperthreading enabled")
             
-            new_compute_data["cpu.hyperthreading"] = True
+            new_compute_data["cpu"]["hyperthreading"] = True
     
     
     
     sys.stdout.write("CPU:\n")
     sys.stdout.write("     CPU Type: " + cpu_type + "\n")
     sys.stdout.write("     CPU Cores: " + str(num_cpu_cores) + "\n")
-    if new_compute_data["cpu.hyperthreading"] is False:
+    if new_compute_data["cpu"]["hyperthreading"] is False:
         sys.stdout.write("     Hyperthreading: ok (disabled)\n")
         
     else:
         sys.stdout.write(red + "     Hyperthreading: Error (enabled)\n" + endcolor)
+        
+    return None
 
 
 
         
         
 # RAM amount
-def get_ram_amount(db):
+def get_ram_amount():
     ram_amount = int()
 
     signal.alarm(30)
@@ -474,12 +500,14 @@ def get_ram_amount(db):
         
         new_compute_data["ram"] = ram_amount / 1024
         
+    return None
+        
         
         
         
         
 # /scratch size
-def scratch_size(db):
+def scratch_size():
     scratch_size = int()
     
     for drive_letter in ascii_lowercase:
@@ -499,82 +527,82 @@ def scratch_size(db):
     
     new_compute_data["scratch_size"] = scratch_size
     
+    return None
+    
     
     
         
         
 # GPU
-def get_gpu_info(db):
+def get_gpu_info():
     signal.alarm(30)
 
-    #try:
-    with open(os.devnull, "w") as devnull:
-        info = subprocess.Popen([main_config["devicequery"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=devnull, shell=True)
-        out = info.communicate("\n")[0]
-        
-        signal.alarm(0)
-        
-        gpu_info = {}
-        
-        for line in out.split(os.linesep):
-            line = line.rstrip()
+    try:
+        with open(os.devnull, "w") as devnull:
+            info = subprocess.Popen([main_config["devicequery"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=devnull, shell=True)
+            out = info.communicate("\n")[0]
             
-            # If we don't have a GPU, say so and stop looking
-            if re.search(".*no CUDA-capable device is detected", line) is not None or \
-                re.search(".*CUDA driver version is insufficient for CUDA runtime version", line) is not None:
-                sys.stdout.write("GPU:\n")
-                sys.stdout.write("     Cards: 0\n")
-                
-                gpu_info["num_cards"] = 0
-                
-                new_compute_data["gpu"] = False
-                
-                break
-                
-            # How many cards do we have?
-            num_card_match = re.match("^Detected (\d+) CUDA Capable device", line)
-            if num_card_match is not None:
-                gpu_info["num_cards"] = int(num_card_match.group(1))
-                
-                continue
-                
-            # How much memory do we have?
-            ram_size_match = re.match("^\s+Total amount of global memory:\s+\d+ MBytes \((\d+) bytes\)$", line)
-            if ram_size_match is not None:
-                mem_bytes_kb_total = int(ram_size_match.group(1)) * gpu_info["num_cards"]
-                gpu_info["ram_size"] = round(float(mem_bytes_kb_total) / 1024.0 / 1024.0 / 1024.0, 2)
-                
-                continue
+            signal.alarm(0)
             
-            # How many GPU cores do we have?
-            num_cores_match = re.match(".*:\s+(\d+) CUDA Cores", line)
-            if num_cores_match is not None:
-                gpu_info["num_cores"] = int(num_cores_match.group(1)) * gpu_info["num_cards"]
+            new_compute_data["gpu"] = {}
+            
+            for line in out.split(os.linesep):
+                line = line.rstrip()
                 
-                break
-            
-            
-        # Done, print and note our GPU info if we have any
-        if gpu_info["num_cards"] != 0:
-            sys.stdout.write("GPU:\n")
-            sys.stdout.write("     Cards: " + str(gpu_info["num_cards"]) + "\n")
-            sys.stdout.write("     Total RAM Size: " + str(gpu_info["ram_size"]) + " GB\n")
-            sys.stdout.write("     Total GPU Cores: " + str(gpu_info["num_cores"]) + "\n")
-        
-        new_compute_data["gpu"] = gpu_info
+                # If we don't have a GPU, say so and stop looking
+                if re.search(".*no CUDA-capable device is detected", line) is not None or \
+                    re.search(".*CUDA driver version is insufficient for CUDA runtime version", line) is not None:
+                    sys.stdout.write("GPU:\n")
+                    sys.stdout.write("     Cards: 0\n")
                     
-    #except Alarm:
-        #sys.stdout.write(red + "Failed to check for GPU, process timed out.\n" + endcolor)
+                    new_compute_data["gpu"]["num_cards"] = 0
+                    
+                    break
+                    
+                # How many cards do we have?
+                num_card_match = re.match("^Detected (\d+) CUDA Capable device", line)
+                if num_card_match is not None:
+                    new_compute_data["gpu"]["num_cards"] = int(num_card_match.group(1))
+                    
+                    continue
+                    
+                # How much memory do we have?
+                ram_size_match = re.match("^\s+Total amount of global memory:\s+\d+ MBytes \((\d+) bytes\)$", line)
+                if ram_size_match is not None:
+                    mem_bytes_kb_total = int(ram_size_match.group(1)) * new_compute_data["gpu"]["num_cards"]
+                    new_compute_data["gpu"]["ram_size"] = round(float(mem_bytes_kb_total) / 1024.0 / 1024.0 / 1024.0, 2)
+                    
+                    continue
+                
+                # How many GPU cores do we have?
+                num_cores_match = re.match(".*:\s+(\d+) CUDA Cores", line)
+                if num_cores_match is not None:
+                    new_compute_data["gpu"]["num_cores"] = int(num_cores_match.group(1)) * new_compute_data["gpu"]["num_cards"]
+                    
+                    break
+                
+                
+            # Done, print and note our GPU info if we have any
+            if new_compute_data["gpu"]["num_cards"] != 0:
+                sys.stdout.write("GPU:\n")
+                sys.stdout.write("     Cards: " + str(new_compute_data["gpu"]["num_cards"]) + "\n")
+                sys.stdout.write("     Total RAM Size: " + str(new_compute_data["gpu"]["ram_size"]) + " GB\n")
+                sys.stdout.write("     Total GPU Cores: " + str(new_compute_data["gpu"]["num_cores"]) + "\n")
+                    
+    except Alarm:
+        sys.stdout.write(red + "Failed to check for GPU, process timed out.\n" + endcolor)
         
-    #except Exception as err:
-        #sys.stderr.write(red + "Failed to check for GPU, process failed: " + str(err) + endcolor + "\n")
+    except Exception as err:
+        sys.stderr.write(red + "Failed to check for GPU, process failed: " + str(err) + endcolor + "\n")
+        
+    return None
             
         
 
         
         
 # Serial number
-def get_seral_number(db):
+def get_seral_number():
     signal.alarm(30)
     
     try:
@@ -602,34 +630,76 @@ def get_seral_number(db):
     except Exception as err:
         sys.stderr.write(red + "Failed to get serial number, process failed: " + str(err) + endcolor)
         
+    return None
+        
         
         
         
         
 # IP addresses
-def get_ip_addresses(db):
+def get_ip_addresses():
     sys.stdout.write("IPs:\n")
+    
+    new_compute_data["ip"] = {}
     
     if node < 256:
         sys.stdout.write("     GigE: 10.201.1." + str(node) + "\n")
         sys.stdout.write("     BMC: 10.202.1." + str(node) + "\n")
         sys.stdout.write("     IB: 10.203.1." + str(node) + "\n")
         
-        new_compute_data["ip.gige"] = "10.201.1." + str(node)
-        new_compute_data["ip.bmc"] = "10.202.1." + str(node)
-        new_compute_data["ip.ib"] = "10.203.1." + str(node)
+        new_compute_data["ip"]["gige"] = "10.201.1." + str(node)
+        new_compute_data["ip"]["bmc"] = "10.202.1." + str(node)
+        new_compute_data["ip"]["ib"] = "10.203.1." + str(node)
         
     elif node > 255:
         sys.stdout.write("     GigE: 10.201.2." + str(node - 256) + "\n")
         sys.stdout.write("     BMC: 10.202.2." + str(node - 256) + "\n")
         sys.stdout.write("     IB: 10.203.2." + str(node - 256) + "\n")
         
-        new_compute_data["ip.gige"] = "10.201.2." + str(node - 256)
-        new_compute_data["ip.bmc"] = "10.202.2." + str(node - 256)
-        new_compute_data["ip.ib"] = "10.203.2." + str(node - 256)
+        new_compute_data["ip"]["gige"] = "10.201.2." + str(node - 256)
+        new_compute_data["ip"]["bmc"] = "10.202.2." + str(node - 256)
+        new_compute_data["ip"]["ib"] = "10.203.2." + str(node - 256)
+        
+    return None
+        
+        
+        
+        
+        
+# Check for missing RAM, CPUs, and GPUs
+def check_missing_parts(db):
+    old_compute_data = db.compute.find_one(
+        {
+            "_id" : node
+        },
+        {
+            "cpu.cpu_num" : 1,
+            "gpu.num_cards" : 1,
+            "ram" : 1
+        }
+    )
+        
+    if old_compute_data is None:
+        return None
+    
+    
+    if old_compute_data.get("cpu").get("cpu_num") != new_compute_data.get("cpu").get("cpu_num"):
+        sys.stderr.write(red + "Current CPU count of " + str(new_compute_data["cpu"]["cpu_num"]) + " does not match previous count of " + str(old_compute_data["cpu"]["cpu_num"]) + endcolor + "\n")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current CPU count of " + str(new_compute_data["cpu"]["cpu_num"]) + " does not match previous count of " + str(old_compute_data["cpu"]["cpu_num"]))
+        
+    if old_compute_data.get("gpu").get("num_cards") != new_compute_data.get("gpu").get("num_cards"):
+        sys.stderr.write(red + "Current GPU card count of " + str(new_compute_data["gpu"]["num_cards"]) + " does not match previous count of " + str(old_compute_data["gpu"]["num_cards"]) + endcolor + "\n")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current GPU card count of " + str(new_compute_data["gpu"]["num_cards"]) + " does not match previous count of " + str(old_compute_data["gpu"]["num_cards"]))
+        
+    
+    if old_compute_data.get("ram") != new_compute_data.get("ram"):
+        sys.stderr.write(red + "Current RAM amount of " + str(new_compute_data["ram"]) + " GB does not match previous amount of " + str(old_compute_data["ram"]) + " GB" + endcolor + "\n")
+        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current RAM amount of " + str(new_compute_data["ram"]) + " GB does not match previous amount of " + str(old_compute_data["ram"]) + " GB")
+        
+    return None
+        
         
 
-        
         
         
 #    
@@ -641,17 +711,17 @@ def get_ip_addresses(db):
 if options.daemonize == False:
     db = connect_mongo()
     
-    check_moab(db)
-    infiniband_check(db)
-    #check_tempurature(db)
-    check_filesystems(db)
-    get_cpu_info(db)
-    get_gpu_info(db)
-    get_ip_addresses(db)
-    get_ram_amount(db)
-    scratch_size(db)
-    get_seral_number(db)
-    
+    check_moab()
+    infiniband_check()
+    #check_tempurature()
+    check_filesystems()
+    get_cpu_info()
+    get_gpu_info()
+    get_ip_addresses()
+    get_ram_amount()
+    scratch_size()
+    get_seral_number()
+    check_missing_parts(db)
     
     # Report that we've now checked ourself
     new_compute_data["last_check"] = int(time.time())
@@ -743,22 +813,23 @@ else:
     # Connect to the DB and get the initial info
     db = connect_mongo()
 
-    check_moab(db)
-    #check_tempurature(db)
-    check_filesystems(db)
-    get_cpu_info(db)
-    get_gpu_info(db)
-    get_ip_addresses(db)
-    get_ram_amount(db)
-    scratch_size(db)
-    get_seral_number(db)
+    check_moab()
+    #check_tempurature()
+    check_filesystems()
+    get_cpu_info()
+    get_gpu_info()
+    get_ip_addresses()
+    get_ram_amount()
+    scratch_size()
+    get_seral_number()
+    check_missing_parts(db)
 
     # Give IB time to come up
     time.sleep(30)
     
     # Keep checking in and make sure IB is up
     while True:
-        infiniband_check(db)
+        infiniband_check()
         
         # Report that we've now checked ourself
         new_compute_data["last_check"] = int(time.time())
