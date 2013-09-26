@@ -1,8 +1,12 @@
-#!/usr/bin/env python
+#!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon zombie catcher, catch vagrant processes on compute nodes
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1
-# Last change: Changed binary paths to variables
+# Version: 1.2.1
+# Last change:
+# * Improved exception catching to print a traceback, the exception 
+#   and an informative message
+
+
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -13,15 +17,14 @@
 
 
 
-import sys, os, re, subprocess, syslog, signal
+import sys, os, re, subprocess, syslog, signal, ConfigParser, pymongo
 import xml.etree.ElementTree as ET
 from optparse import OptionParser
 
 
 
-qstat = "/opt/sam/torque/3.0.5/bin/qstat"
-bpstat = "/usr/bin/bpstat"
-ps = "/bin/ps"
+red = "\033[31m"
+endcolor = '\033[0m'
 
 
 
@@ -39,6 +42,26 @@ parser = OptionParser("%prog [options]\n" +
 
 
 
+# Preint a stack trace, exception, and an error string to STDERR
+# then exit with the exit status given (default: 1) or don't exit
+# if passed NoneType
+def fatal_error(error_string, exit_status=1):
+    red = "\033[31m"
+    endcolor = "\033[0m"
+
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+
+    traceback.print_exception(exc_type, exc_value, exc_traceback)
+
+    sys.stderr.write("\n" + red + str(error_string) + endcolor + "\n")
+    
+    if exit_status is not None:
+        sys.exit(int(exit_status))
+
+
+
+
+
 # Prepare for subprocess timeouts
 class Alarm(Exception):
     pass
@@ -51,6 +74,47 @@ signal.signal(signal.SIGALRM, alarm_handler)
 
 
 
+
+# Read the config file
+config = ConfigParser.ConfigParser()
+config.read("/opt/sam/beomon/etc/beomon.conf")
+
+main_config = dict(config.items("main"))
+
+
+
+
+
+# Get the DB password
+dbpasshandle = open("/opt/sam/beomon/beomonpass.txt", "r")
+dbpass = dbpasshandle.read().rstrip()
+dbpasshandle.close()
+
+    
+    
+# Open a DB connection
+try:
+    mongo_client = pymongo.MongoClient(main_config["mongo_host"])
+
+    db = mongo_client.beomon
+    
+    db.authenticate("beomon", dbpass)
+    
+    del(dbpass)
+    
+except:
+    fatal_error("Failed to connect to the Beomon database")
+    
+    
+    
+    
+    
+hostname = os.uname()[1]
+
+
+
+
+
 #
 # Get the current queue status
 #
@@ -58,7 +122,7 @@ job_data = {}
 signal.alarm(60)
 
 try:
-    qstat_info = subprocess.Popen([qstat, "-x"], stdin=None, stdout=subprocess.PIPE)
+    qstat_info = subprocess.Popen([main_config["qstat"], "-x"], stdin=None, stdout=subprocess.PIPE)
     qstat_out = qstat_info.communicate()[0]
     
     signal.alarm(0)
@@ -68,12 +132,10 @@ except Alarm:
     
     syslog.syslog(syslog.LOG_INFO, "Zombie process check timed out on qstat")
         
-except Exception as err:
-    sys.stderr.write("Failed to check for zombie processes on qstat: " + str(err) + "\n")
-    
+except:
     syslog.syslog(syslog.LOG_INFO, "Failed to check for zombie processes on qstat: " + str(err))
     
-    sys.exit(1)
+    fatal_error("Failed to check for zombie processes on qstat")
 
 
 root = ET.fromstring(qstat_out)
@@ -122,9 +184,9 @@ for job in root.getiterator("Job"):
 signal.alarm(60)
 
 try:
-    ps_info = subprocess.Popen([ps, "-e", "-o", "pid,euser,comm"], stdin=None, stdout=subprocess.PIPE)
+    ps_info = subprocess.Popen(["ps", "-e", "-o", "pid,euser,comm"], stdin=None, stdout=subprocess.PIPE)
         
-    bpstat_info = subprocess.Popen([bpstat, "-P"], stdin=ps_info.stdout, stdout=subprocess.PIPE)
+    bpstat_info = subprocess.Popen(["bpstat", "-P"], stdin=ps_info.stdout, stdout=subprocess.PIPE)
     ps_info.stdout.close()
     bpstat_out = bpstat_info.communicate()[0]
         
@@ -135,18 +197,18 @@ except Alarm:
     
     syslog.syslog(syslog.LOG_INFO, "Zombie process check timed out")
         
-except Exception as err:
-    sys.stderr.write("Failed to check for zombie processes: " + str(err) + "\n")
-    
+except:
     syslog.syslog(syslog.LOG_INFO, "Failed to check for zombie processes: " + str(err))
     
-    sys.exit(1)
+    fatal_error("Failed to check for zombie processes (bpstat or ps failed)")
     
     
     
 #
 # Find the zombies
 #
+zombie_dicts = []
+
 for line in bpstat_out.split(os.linesep):
     line = line.rstrip()
     
@@ -178,14 +240,52 @@ for line in bpstat_out.split(os.linesep):
     # Should the user's process be here?
     try:
         if user not in job_data[node_num]:
-            sys.stdout.write("Zombie " + pid + " (" + command + ") of user " + user + " found on node " + node_num + "\n")
+            sys.stdout.write("Zombie " + pid + " (" + command + ") of user " + user + " found from node " + node_num + "\n")
             
-            syslog.syslog(syslog.LOG_INFO, "Zombie " + pid + " (" + command + ") of user " + user + " found on node " + node_num)
-        
+            syslog.syslog(syslog.LOG_INFO, "Zombie " + pid + " (" + command + ") of user " + user + " found from node " + node_num)
+            
+            zombie_dicts.append(
+                {
+                    "command" : command,
+                    "user" : user,
+                    "PID" : pid,
+                    "node" : node_num,
+                }
+            )
+            
     except KeyError: # We need this in case the node has no jobs on it so is not in the dict
-        sys.stdout.write("Zombie " + pid + " (" + command + ") of user " + user + " found on node " + node_num + "\n")
+        sys.stdout.write("Zombie " + pid + " (" + command + ") of user " + user + " found from node " + node_num + "\n")
         
-        syslog.syslog(syslog.LOG_INFO, "Zombie " + pid + " (" + command + ") of user " + user + " found on node " + node_num)
+        syslog.syslog(syslog.LOG_INFO, "Zombie " + pid + " (" + command + ") of user " + user + " found from node " + node_num)
+        
+        zombie_dicts.append(
+                {
+                    "command" : command,
+                    "user" : user,
+                    "PID" : pid,
+                    "node" : node_num,
+                }
+            )
+
+        
+        
+        
+        
+# Add the info to the DB
+db.head_clusman.update(
+    {
+        "_id" : hostname.split(".")[0]
+    },
+    {
+        "$set" : {
+            "zombies" : zombie_dicts
+        }
+    },
+    upsert = True,
+)
+        
+        
+        
         
         
 sys.stdout.write("Done!\n")

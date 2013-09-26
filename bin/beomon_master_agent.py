@@ -1,9 +1,12 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.3.6
-# Last change: Fixed a bug introduced in 2.3.4 where a node jumped between down and orphan states
-# both orphan and down cause a timestampt to be added to the down_times array in the DB
+# Version: 2.3.7
+# Last change:
+# * Improved exception catching to print a traceback, the exception 
+#   and an informative message
+
+
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -42,6 +45,28 @@ parser = OptionParser("%prog [options] [nodes ...]\n" +
 )
 
 (options, args) = parser.parse_args()
+
+
+
+
+
+# Preint a stack trace, exception, and an error string to STDERR
+# then exit with the exit status given (default: 1) or don't exit
+# if passed NoneType
+def fatal_error(error_string, exit_status=1):
+    red = "\033[31m"
+    endcolor = "\033[0m"
+
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+
+    traceback.print_exception(exc_type, exc_value, exc_traceback)
+
+    sys.stderr.write("\n" + red + str(error_string) + endcolor + "\n")
+    
+    if exit_status is not None:
+        sys.exit(int(exit_status))
+        
+        
 
 
 
@@ -112,9 +137,8 @@ try:
     
     del(dbpass)
     
-except Exception as err:
-    sys.stderr.write("Failed to connect to the Beomon database: " + str(err) + "\n")
-    sys.exit(1)
+except:
+    fatal_error("Failed to connect to the Beomon database")
 
     
     
@@ -254,8 +278,11 @@ for _, each_file in hash_files.items():
     try:
         each_file_handle = open(each_file, "rb")
         
-    except Exception as err:
-        sys.stderr.write("Unable to open " + each_file + " for hashing: " + str(err) + "\n")
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, None)
+        
+        sys.stderr.write(red + "Unable to open " + each_file + " for hashing\n" + endcolor)
         
         continue
     
@@ -341,9 +368,8 @@ try:
     
     bpstat_out = bpstat_proc.communicate()[0]
     
-except Exception as err:
-    sys.stderr.write("Call to bpstat failed: " + str(err))
-    sys.exit(1)
+except:
+    fatal_error("Call to bpstat failed")
     
     
 

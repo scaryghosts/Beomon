@@ -1,12 +1,10 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.2.1
+# Version: 2.2.2
 # Last change: 
-# * Added Note of which type of GPU card is installed
-#
-# * Changed check of missing parts to "old_value > new_value" rather than
-# checking for equality to prevent dupicate alerts when the issue is resolved
+# * Improved exception catching to print a traceback, the exception 
+#   and an informative message
 
 
 
@@ -19,7 +17,7 @@
 
 
 
-import sys, os, re, pymongo, subprocess, time, syslog, signal, ConfigParser
+import sys, os, re, pymongo, subprocess, time, syslog, signal, ConfigParser, traceback
 from optparse import OptionParser
 from multiprocessing import cpu_count
 from string import ascii_lowercase
@@ -46,6 +44,26 @@ parser.add_option(
 
 (options, args) = parser.parse_args()
 
+
+
+
+
+# Preint a stack trace, exception, and an error string to STDERR
+# then exit with the exit status given (default: 1) or don't exit
+# if passed NoneType
+def fatal_error(error_string, exit_status=1):
+    red = "\033[31m"
+    endcolor = "\033[0m"
+
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+
+    traceback.print_exception(exc_type, exc_value, exc_traceback)
+
+    sys.stderr.write("\n" + red + str(error_string) + endcolor + "\n")
+    
+    if exit_status is not None:
+        sys.exit(int(exit_status))
+    
 
 
 
@@ -82,9 +100,8 @@ def connect_mongo():
                                                 
         return db
         
-    except Exception as err:
-        sys.stderr.write("Failed to connect to the Beomon database: " + str(err) + "\n")
-        sys.exit(1)
+    except:
+        fatal_error("Failed to connect to the Beomon database")
         
         
         
@@ -167,12 +184,12 @@ def check_moab():
         
         new_compute_data["moab"] = False
             
-    except Exception as err:
-        sys.stderr.write(red + "Moab: sysfail (" + str(err) + ")\n" + endcolor)
-        
+    except:
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Moab in state 'sysfail'")
         
         new_compute_data["moab"] = False
+        
+        fatal_error("MOAB check failed", None)
         
     return None
         
@@ -219,12 +236,12 @@ def infiniband_check():
             
             new_compute_data["infiniband"] = "timeout"
             
-        except Exception as err:
-            sys.stderr.write(red + "Infiniband: sysfail (" + str(err) + ")" + endcolor)
-            
+        except:
             syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Infiniband in state sysfail")
             
             new_compute_data["infiniband"] = False
+            
+            fatal_error("Infiniband check failed", None)
             
     return None
             
@@ -294,10 +311,10 @@ def check_tempurature():
         
         new_compute_data["tempurature"] = "timeout"
         
-    except Exception as err:
-        sys.stderr.write("Tempurature: sysfail (" + str(err) + ")")
-        
+    except:
         new_compute_data["tempurature"] = False
+        
+        fatal_error("Tempurature check failed", None)
         
     return None
         
@@ -487,8 +504,8 @@ def get_ram_amount():
     except Alarm:
         sys.stdout.write("Failed to get RAM amount, process timed out.\n")
         
-    except Exception as err:
-        sys.stderr.write("Failed to get RAM amount, process failed: " + str(err))
+    except:
+        fatal_error("Failed to get RAM amount", None)
         
         
     if ram_amount != 0:
@@ -596,8 +613,8 @@ def get_gpu_info():
     except Alarm:
         sys.stdout.write(red + "Failed to check for GPU, process timed out.\n" + endcolor)
         
-    except Exception as err:
-        sys.stderr.write(red + "Failed to check for GPU, process failed: " + str(err) + endcolor + "\n")
+    except:
+        fatal_error("GPU check failed", None)
         
     return None
             
@@ -631,8 +648,8 @@ def get_seral_number():
     except Alarm:
         sys.stdout.write(red + "Failed to get serial number, process timed out.\n" + endcolor)
         
-    except Exception as err:
-        sys.stderr.write(red + "Failed to get serial number, process failed: " + str(err) + endcolor)
+    except:
+        fatal_error("Failed to get serial number", None)
         
     return None
         
