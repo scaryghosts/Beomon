@@ -71,8 +71,9 @@
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Type: {{ node_doc["cpu"]["cpu_type"] }}<br>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Cores: {{ node_doc["cpu"]["cpu_num"] }}<br>
         GPU:<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Cards: {{ node_doc["gpu"]["num_cards"] }}<br>
             %if node_doc["gpu"]["num_cards"] != 0:
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GPU Type: {{ node_doc["gpu"]["gpu_type"] }}<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Cards: {{ node_doc["gpu"]["num_cards"] }}<br>
                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Total RAM Size: {{ node_doc["gpu"]["ram_size"] }} GB<br>
                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Total GPU Cores: {{ node_doc["gpu"]["num_cores"] }}<br>
             %end

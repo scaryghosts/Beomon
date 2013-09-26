@@ -1,16 +1,12 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.2
+# Version: 2.2.1
 # Last change: 
-# * Added a feature to check for missing RAM, CPUs, and GPUs 
-# (compare what the node has now to what it had last time it was checked).
-
-# * Removed useless passing of the db object to most functions.
-
-# * Re-added the try...except code for the GPU check
-
-# * Changed "dict inside a dict" from Mongo syntax to Pythonic syntax
+# * Added Note of which type of GPU card is installed
+#
+# * Changed check of missing parts to "old_value > new_value" rather than
+# checking for equality to prevent dupicate alerts when the issue is resolved
 
 
 
@@ -559,6 +555,13 @@ def get_gpu_info():
                     
                     break
                     
+                # What type of card do we have?
+                gpu_type_match = re.match("^Device 0: \"(.*)\".*", line)
+                if gpu_type_match is not None:
+                    new_compute_data["gpu"]["gpu_type"] = gpu_type_match.group(1)
+                    
+                    continue
+                    
                 # How many cards do we have?
                 num_card_match = re.match("^Detected (\d+) CUDA Capable device", line)
                 if num_card_match is not None:
@@ -585,6 +588,7 @@ def get_gpu_info():
             # Done, print and note our GPU info if we have any
             if new_compute_data["gpu"]["num_cards"] != 0:
                 sys.stdout.write("GPU:\n")
+                sys.stdout.write("     GPU Type: " + str(new_compute_data["gpu"]["gpu_type"]) + "\n")
                 sys.stdout.write("     Cards: " + str(new_compute_data["gpu"]["num_cards"]) + "\n")
                 sys.stdout.write("     Total RAM Size: " + str(new_compute_data["gpu"]["ram_size"]) + " GB\n")
                 sys.stdout.write("     Total GPU Cores: " + str(new_compute_data["gpu"]["num_cores"]) + "\n")
@@ -683,16 +687,16 @@ def check_missing_parts(db):
         return None
     
     
-    if old_compute_data.get("cpu").get("cpu_num") != new_compute_data.get("cpu").get("cpu_num"):
+    if old_compute_data.get("cpu").get("cpu_num") > new_compute_data.get("cpu").get("cpu_num"):
         sys.stderr.write(red + "Current CPU count of " + str(new_compute_data["cpu"]["cpu_num"]) + " does not match previous count of " + str(old_compute_data["cpu"]["cpu_num"]) + endcolor + "\n")
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current CPU count of " + str(new_compute_data["cpu"]["cpu_num"]) + " does not match previous count of " + str(old_compute_data["cpu"]["cpu_num"]))
         
-    if old_compute_data.get("gpu").get("num_cards") != new_compute_data.get("gpu").get("num_cards"):
+    if old_compute_data.get("gpu").get("num_cards") > new_compute_data.get("gpu").get("num_cards"):
         sys.stderr.write(red + "Current GPU card count of " + str(new_compute_data["gpu"]["num_cards"]) + " does not match previous count of " + str(old_compute_data["gpu"]["num_cards"]) + endcolor + "\n")
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current GPU card count of " + str(new_compute_data["gpu"]["num_cards"]) + " does not match previous count of " + str(old_compute_data["gpu"]["num_cards"]))
         
     
-    if old_compute_data.get("ram") != new_compute_data.get("ram"):
+    if old_compute_data.get("ram") > new_compute_data.get("ram"):
         sys.stderr.write(red + "Current RAM amount of " + str(new_compute_data["ram"]) + " GB does not match previous amount of " + str(old_compute_data["ram"]) + " GB" + endcolor + "\n")
         syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current RAM amount of " + str(new_compute_data["ram"]) + " GB does not match previous amount of " + str(old_compute_data["ram"]) + " GB")
         

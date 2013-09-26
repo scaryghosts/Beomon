@@ -1,8 +1,8 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon command line interface
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.1
-# Last change: Fixed the output of the list of down, error, and boot nodes
+# Version: 1.2
+# Last change: Added Note of which type of GPU card is installed
 
 # License:
 # This software is released under version three of the GNU General Public License (GPL) of the
@@ -257,6 +257,8 @@ else: # Node status
             
             if doc["gpu"]["num_cards"] != 0:
                 print "GPU:"
+                print "     GPU Type: " + doc["gpu"]["gpu_type"]
+                print "     Cards: " + str(doc["gpu"]["num_cards"])
                 print "     Total RAM Size: " + str(doc["gpu"]["ram_size"]) + " GB"
                 print "     Total GPU Cores: " + locale.format("%d", doc["gpu"]["num_cores"], grouping=True)
                 
