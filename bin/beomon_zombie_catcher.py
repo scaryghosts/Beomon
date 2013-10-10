@@ -1,10 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon zombie catcher, catch vagrant processes on compute nodes
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.1
+# Version: 1.2.2
 # Last change:
-# * Improved exception catching to print a traceback, the exception 
-#   and an informative message
+# * Adding missing traceback module
 
 
 
@@ -17,7 +16,7 @@
 
 
 
-import sys, os, re, subprocess, syslog, signal, ConfigParser, pymongo
+import sys, os, re, subprocess, syslog, signal, ConfigParser, pymongo, traceback
 import xml.etree.ElementTree as ET
 from optparse import OptionParser
 

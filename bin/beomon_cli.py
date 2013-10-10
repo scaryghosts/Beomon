@@ -1,10 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon command line interface
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.1
+# Version: 1.2.2
 # Last change:
-# * Improved exception catching to print a traceback, the exception 
-#   and an informative message
+# * Adding missing traceback module
 
 
 
@@ -17,7 +16,7 @@
 
 
 
-import sys, os, re, pymongo, time, ConfigParser, locale
+import sys, os, re, pymongo, time, ConfigParser, locale, traceback
 from optparse import OptionParser
 
 

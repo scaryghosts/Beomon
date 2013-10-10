@@ -1,10 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.3.7
+# Version: 2.3.8
 # Last change:
-# * Improved exception catching to print a traceback, the exception 
-#   and an informative message
+# * Adding missing traceback module
 
 
 
@@ -17,7 +16,7 @@
 
 
 
-import sys, os, re, pymongo, subprocess, time, syslog, paramiko, signal, hashlib, ConfigParser, datetime
+import sys, os, re, pymongo, subprocess, time, syslog, paramiko, signal, hashlib, ConfigParser, datetime, traceback
 from optparse import OptionParser
 
 
