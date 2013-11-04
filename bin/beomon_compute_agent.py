@@ -1,10 +1,10 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.2.2
+# Version: 2.2.3
 # Last change: 
-# * Improved exception catching to print a traceback, the exception 
-#   and an informative message
+# * Ony check Infiniband every 6 hours
+# * Add check for /gscratch2 mount
 
 
 
@@ -328,6 +328,7 @@ def check_filesystems():
         "/data/pkg" : "datapkg",
         "/data/sam" : "datasam",
         "/gscratch1" : "gscratch1",
+        "/gscratch2" : "gscratch2",
         "/home" : "home0",
         "/home1" : "home1",
         "/home2" : "home2",
@@ -848,9 +849,16 @@ else:
     # Give IB time to come up
     time.sleep(30)
     
+    # Mark that we need to check IB at the start of the next loop
+    last_ib_check = 0
+    
     # Keep checking in and make sure IB is up
     while True:
-        infiniband_check()
+        # Only check IB every 6 hours
+        if (int(time.time()) - last_ib_check) > (6 * 60):
+            infiniband_check()
+            
+            last_ib_check = int(time.time())
         
         # Report that we've now checked ourself
         new_compute_data["last_check"] = int(time.time())
