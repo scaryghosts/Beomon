@@ -1,9 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4.3.2
+# Version: 4.4
 # Last change:
-# * Adding missing traceback module
+# * Adding a journal for each compute node to store text notes (e.g. "ECC errors in syslog, reseated all DIMMs")
 
 
 
@@ -20,7 +20,7 @@ import sys
 sys.path.append("/opt/sam/beomon/bin")
 import os, re, pymongo, time, locale, signal, subprocess, ConfigParser, traceback
 import bottle
-from bottle import Bottle, run, template, route
+from bottle import Bottle, run, template, route, post, get, request
 from optparse import OptionParser
 
 
@@ -238,10 +238,47 @@ def show_node_page(node):
                 
                 
             outages.append(outage_details)
+            
+            
+    # Make a pretty timestamp in the journal entries
+    try:
+        for entry in node_doc["journal"]:
+            entry["time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry["time"]))
+                                          
+    except KeyError:
+        node_doc["journal"] = []
         
     
     return bottle.template("node", node_doc=node_doc, outages=outages)
+
+
+
+
+
+# Add a journal entry to a node
+@post("/node/<node>/journal")
+def show_node_page(node):
+    # Did we get a proper node number?
+    try:
+        node = int(node)
+        
+    except ValueError:
+        return "No such node: " + str(node)
     
+    entry = request.forms.get("entry")
+    
+    # Replace newlines and line feeds with HTML's <br>
+    entry = entry.replace("\r\n", "<br>")
+    
+    db.compute.update(
+        { "_id" : node },
+        { "$push" : { "journal" : { "time" : time.time(), "entry" : entry } } }
+    )
+
+
+    
+    return bottle.template("node_journal_success", node=node)
+
     
     
     
