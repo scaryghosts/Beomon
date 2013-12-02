@@ -1,10 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.2.3
+# Version: 2.2.5
 # Last change: 
-# * Ony check Infiniband every 6 hours
-# * Add check for /gscratch2 mount
+# * Fixed a bug in check_missing_parts() where previous node data did not exist
 
 
 
@@ -700,24 +699,25 @@ def check_missing_parts(db):
             "ram" : 1
         }
     )
+    
+
+    try:
+        if old_compute_data.get("cpu").get("cpu_num") > new_compute_data.get("cpu").get("cpu_num"):
+            sys.stderr.write(red + "Current CPU count of " + str(new_compute_data["cpu"]["cpu_num"]) + " does not match previous count of " + str(old_compute_data["cpu"]["cpu_num"]) + endcolor + "\n")
+            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current CPU count of " + str(new_compute_data["cpu"]["cpu_num"]) + " does not match previous count of " + str(old_compute_data["cpu"]["cpu_num"]))
+            
+        if old_compute_data.get("gpu").get("num_cards") > new_compute_data.get("gpu").get("num_cards"):
+            sys.stderr.write(red + "Current GPU card count of " + str(new_compute_data["gpu"]["num_cards"]) + " does not match previous count of " + str(old_compute_data["gpu"]["num_cards"]) + endcolor + "\n")
+            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current GPU card count of " + str(new_compute_data["gpu"]["num_cards"]) + " does not match previous count of " + str(old_compute_data["gpu"]["num_cards"]))
+            
         
-    if old_compute_data is None:
+        if old_compute_data.get("ram") > new_compute_data.get("ram"):
+            sys.stderr.write(red + "Current RAM amount of " + str(new_compute_data["ram"]) + " GB does not match previous amount of " + str(old_compute_data["ram"]) + " GB" + endcolor + "\n")
+            syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current RAM amount of " + str(new_compute_data["ram"]) + " GB does not match previous amount of " + str(old_compute_data["ram"]) + " GB")
+        
+    except AttributeError:
         return None
     
-    
-    if old_compute_data.get("cpu").get("cpu_num") > new_compute_data.get("cpu").get("cpu_num"):
-        sys.stderr.write(red + "Current CPU count of " + str(new_compute_data["cpu"]["cpu_num"]) + " does not match previous count of " + str(old_compute_data["cpu"]["cpu_num"]) + endcolor + "\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current CPU count of " + str(new_compute_data["cpu"]["cpu_num"]) + " does not match previous count of " + str(old_compute_data["cpu"]["cpu_num"]))
-        
-    if old_compute_data.get("gpu").get("num_cards") > new_compute_data.get("gpu").get("num_cards"):
-        sys.stderr.write(red + "Current GPU card count of " + str(new_compute_data["gpu"]["num_cards"]) + " does not match previous count of " + str(old_compute_data["gpu"]["num_cards"]) + endcolor + "\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current GPU card count of " + str(new_compute_data["gpu"]["num_cards"]) + " does not match previous count of " + str(old_compute_data["gpu"]["num_cards"]))
-        
-    
-    if old_compute_data.get("ram") > new_compute_data.get("ram"):
-        sys.stderr.write(red + "Current RAM amount of " + str(new_compute_data["ram"]) + " GB does not match previous amount of " + str(old_compute_data["ram"]) + " GB" + endcolor + "\n")
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " current RAM amount of " + str(new_compute_data["ram"]) + " GB does not match previous amount of " + str(old_compute_data["ram"]) + " GB")
-        
     return None
         
         
@@ -855,7 +855,7 @@ else:
     # Keep checking in and make sure IB is up
     while True:
         # Only check IB every 6 hours
-        if (int(time.time()) - last_ib_check) > (6 * 60):
+        if (int(time.time()) - last_ib_check) > (60 * 60 * 6):
             infiniband_check()
             
             last_ib_check = int(time.time())
