@@ -1,9 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon command line interface
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.2.2
+# Version: 1.3
 # Last change:
-# * Adding missing traceback module
+# * Adding node journal (view only)
 
 
 
@@ -298,114 +298,23 @@ else: # Node status
             print "Last Check-in: " + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(doc["last_check"]))
             
             
-            
             #
-            # Print the outage information
+            # Print the node's journal
             #
             
-            outages = []
+            print "\nJournal:"
             
-            down_times = doc.get("down_times")
-            up_times = doc.get("up_times")
-            
-            
-            # Unique
-            try:
-                down_times = set(down_times)
-                up_times = set(up_times)
-                
-            except:
-                pass
-                    
-
-            if down_times is not None or up_times is not None:
-                while True:
-                    outage_details = {}
-                    
-                    
-                    # Get the lowest times
-                    try:
-                        min_down = min(down_times)
-                        
-                    except:
-                        down_times = None
-                        min_down = None
-                        
-                    try:
-                        min_up = min(up_times)
-                        
-                    except:
-                        up_times = None
-                        min_up = None
-                        
-                        
-
-                    # Do we have anything to look at this iteration?
-                    if down_times is None and up_times is None:
-                        break
-                        
-                        
-                        
-                    # Handle the down time
-                    if min_down is None:
-                        outage_details["down"] = "Unknown"
-                    
-                    elif min_up is None:
-                        outage_details["down"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_down)) + ""
-                        down_times.remove(min_down)
-                    
-                    elif min_down < min_up:
-                        outage_details["down"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_down)) + ""
-                        down_times.remove(min_down)
-                        
-                    else:
-                        outage_details["down"] = "Unknown"
-                        
-                        
-                        
-                    # Handle the up time
-                    if min_up is None:
-                        outage_details["up"] = "Unknown"
-                    
-                    elif min_down is None:
-                        outage_details["up"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_up)) + ""
-                        up_times.remove(min_up)
-                    
-                    else:
-                        outage_details["up"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_up)) + ""
-                        up_times.remove(min_up)
-                        
-                        
-                        
-                    # Handle the outage duration
-                    if min_down is not None and min_up is not None and min_down < min_up:
-                        diff = min_up - min_down
-                        
-                        outage_details["outage"] = time.strftime('%H hours %M minutes %S seconds', time.gmtime(diff)) + ""
-                        
-                    else:
-                        outage_details["outage"] = "Unknown"
-                        
-                        
-                    outages.append(outage_details)
-            
-            print ""
-            print "Outages:"
-            
-            if len(outages) == 0:
-                print "     No outages found"
+            if len(doc["journal"]) > 0:
+                for entry in doc["journal"]:
+                    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry["time"])) + ":"
+                    print re.sub("<br>", "\n", entry["entry"])
+                    print "----------------------------------"
                 
             else:
-                for outage in outages:
-                    print "     Down: " + outage["down"]
-                    print "     Up: " + outage["up"]
-                    print "     Duration: " + outage["outage"]
-                    print ""
-                    
-            print "-----     -----     -----"
+                print "No journal entries"
             
             
-
+            
         else: # Head node
             print "Node: " + node
             
