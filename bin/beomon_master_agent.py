@@ -1,9 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.3.8
+# Version: 2.4
 # Last change:
-# * Adding missing traceback module
+# * Remove "outages" code and add node state changes to the node's journal instead
 
 
 
@@ -504,6 +504,12 @@ for line in bpstat_out.split(os.linesep):
             sys.stdout.write("State: up - new\n")
             log_self("Node " + str(node) + " is in state up")
             
+            # Add an entry to the journal for this node
+            db.compute.update(
+                { "_id" : node },
+                { "$push" : { "journal" : { "time" : time.time(), "entry" : "Node state switched to 'up'.<br><br>-- Beomon Master Agent" } } }
+            )
+            
             try:
                 ssh = paramiko.SSHClient()
                 
@@ -544,19 +550,6 @@ for line in bpstat_out.split(os.linesep):
             new_compute_data["state"] = "up"
             
             new_compute_data["state_time"] = int(time.time())
-            
-            # Update the compute collection
-            db.compute.update(
-                {
-                    "_id" : node
-                },
-                {
-                    "$push" : {
-                            "up_times" : int(time.time())
-                        }
-                },
-                upsert = True,
-            )
             
         
     elif status == "down": # Really could be orphan or partnered instead of down
@@ -654,6 +647,12 @@ for line in bpstat_out.split(os.linesep):
                 sys.stdout.write(red + "State: orphan - new\n" + endcolor)
                 log_self("Node " + str(node) + " is in state orphan")
                 
+                # Add an entry to the journal for this node
+                db.compute.update(
+                    { "_id" : node },
+                    { "$push" : { "journal" : { "time" : time.time(), "entry" : "Node state switched to 'orphan'.<br><br>-- Beomon Master Agent" } } }
+                )
+                
                 try:
                     ssh = paramiko.SSHClient()
                     
@@ -694,19 +693,6 @@ for line in bpstat_out.split(os.linesep):
                 new_compute_data["state"] = "orphan"
                 new_compute_data["state_time"] = int(time.time())
                 
-                # Update the compute collection
-                db.compute.update(
-                    {
-                        "_id" : node
-                    },
-                    {
-                        "$push" : {
-                                "down_times" : int(time.time())
-                            }
-                    },
-                    upsert = True,
-                )
-                    
         
         # The node has not checked in within the last 10 minutes OR has been "down" as far
         # as the head node knows for less than 7 minutes, consider it down
@@ -732,21 +718,14 @@ for line in bpstat_out.split(os.linesep):
                 syslog.syslog(syslog.LOG_WARNING, "Node " + str(node) + " is not up, state: down")
                 log_self("Node " + str(node) + " is in state down")
                 
+                # Add an entry to the journal for this node
+                db.compute.update(
+                    { "_id" : node },
+                    { "$push" : { "journal" : { "time" : time.time(), "entry" : "Node state switched to 'down'.<br><br>-- Beomon Master Agent" } } }
+                )
+                
                 new_compute_data["state"] = "down"
                 new_compute_data["state_time"] = int(time.time())
-                
-                # Update the compute collection
-                db.compute.update(
-                    {
-                        "_id" : node
-                    },
-                    {
-                        "$push" : {
-                                "down_times" : int(time.time())
-                            }
-                    },
-                    upsert = True,
-                )
                 
             
     elif status == "boot":
@@ -766,6 +745,12 @@ for line in bpstat_out.split(os.linesep):
             sys.stdout.write("State: boot - new\n")
             log_self("Node " + str(node) + " is in state boot")
             
+            # Add an entry to the journal for this node
+            db.compute.update(
+                { "_id" : node },
+                { "$push" : { "journal" : { "time" : time.time(), "entry" : "Node state switched to 'boot'.<br><br>-- Beomon Master Agent" } } }
+            )
+            
             new_compute_data["state"] = "boot"
             new_compute_data["state_time"] = int(time.time())
             
@@ -782,6 +767,12 @@ for line in bpstat_out.split(os.linesep):
         else:
             sys.stdout.write(red + "State: error - new\n" + endcolor)
             log_self("Node " + str(node) + " is in state error")
+            
+            # Add an entry to the journal for this node
+            db.compute.update(
+                { "_id" : node },
+                { "$push" : { "journal" : { "time" : time.time(), "entry" : "Node state switched to 'error'.<br><br>-- Beomon Master Agent" } } }
+            )
             
             new_compute_data["state"] = "error"
             new_compute_data["state_time"] = int(time.time())

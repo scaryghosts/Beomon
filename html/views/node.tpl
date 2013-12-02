@@ -89,23 +89,6 @@
         </p>
 
 
-        <!-- Outages -->
-        <p>
-        <span style="font-weight:bold;">Outages:</span><br>
-        %if len(outages) == 0:
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;No outages found.<br>
-
-        %else:
-            %for outage in outages:
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Down: {{ outage["down"] }}<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Up: {{ outage["up"] }}<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Duration: {{ outage["outage"] }}<br>
-                <br>
-            %end
-        %end
-        </p>
-        
-        
         <!-- Journal section -->
         <p>
         <span style="font-weight:bold;">Journal:</span>
@@ -113,13 +96,14 @@
             %for entry in node_doc["journal"]:
                 <div style="text-align: left; max-width: 300px;">
                     <div>
-                        {{ entry["time"] }}
+                        {{ entry["time"] }}:
                     </div>
                     
                     <div>
                         {{! entry["entry"] }}
                     </div>
                 </div>
+                ----------------------------------
                 <br>
             %end
             
@@ -128,6 +112,7 @@
         %end
         
         <br>
+        New journal entry:
         <form action="/beomon/node/{{node_doc['_id']}}/journal" method="post">
             <textarea cols="75" rows="10" name="entry"></textarea><br>
             <input value="Add to journal" type="submit">

@@ -1,9 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon status viewer
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4.4
+# Version: 4.5
 # Last change:
-# * Adding a journal for each compute node to store text notes (e.g. "ECC errors in syslog, reseated all DIMMs")
+# * Remove "outages" code and add node state changes to the node's journal instead
 
 
 
@@ -149,97 +149,6 @@ def show_node_page(node):
         
     
     
-    #
-    # Build the outage information
-    #
-    
-    outages = []
-    
-    down_times = node_doc.get("down_times")
-    up_times = node_doc.get("up_times")
-    
-    
-    # Unique
-    try:
-        down_times = set(down_times)
-        up_times = set(up_times)
-        
-    except:
-        pass
-            
-
-    if down_times is not None or up_times is not None:
-        while True:
-            outage_details = {}
-            
-            
-            # Get the lowest times
-            try:
-                min_down = min(down_times)
-                
-            except:
-                down_times = None
-                min_down = None
-                
-            try:
-                min_up = min(up_times)
-                
-            except:
-                up_times = None
-                min_up = None
-                
-                
-
-            # Do we have anything to look at this iteration?
-            if down_times is None and up_times is None:
-                break
-                
-                
-                
-            # Handle the down time
-            if min_down is None:
-                outage_details["down"] = "Unknown"
-            
-            elif min_up is None:
-                outage_details["down"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_down)) + ""
-                down_times.remove(min_down)
-            
-            elif min_down < min_up:
-                outage_details["down"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_down)) + ""
-                down_times.remove(min_down)
-                
-            else:
-                outage_details["down"] = "Unknown"
-                
-                
-                
-            # Handle the up time
-            if min_up is None:
-                outage_details["up"] = "Unknown"
-            
-            elif min_down is None:
-                outage_details["up"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_up)) + ""
-                up_times.remove(min_up)
-            
-            else:
-                outage_details["up"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(min_up)) + ""
-                up_times.remove(min_up)
-                
-                
-                
-            # Handle the outage duration
-            if min_down is not None and min_up is not None and min_down < min_up:
-                diff = min_up - min_down
-                
-                outage_details["outage"] = time.strftime('%H hours %M minutes %S seconds', time.gmtime(diff)) + ""
-                
-            else:
-                outage_details["outage"] = "Unknown"
-                
-                
-            outages.append(outage_details)
-            
-            
     # Make a pretty timestamp in the journal entries
     try:
         for entry in node_doc["journal"]:
@@ -249,7 +158,7 @@ def show_node_page(node):
         node_doc["journal"] = []
         
     
-    return bottle.template("node", node_doc=node_doc, outages=outages)
+    return bottle.template("node", node_doc=node_doc)
 
 
 
@@ -399,9 +308,9 @@ def index():
         <thead>
             <tr>
                 <th colspan="2">Compute Summary</th>
-                <th style=\"background-color:#A4A4A4;\"></th>
+                <th style=\"background-color:#CCCCCC;\"></th>
                 <th colspan="3">Storage Summary</th>
-                <th style=\"background-color:#A4A4A4;\"></th>
+                <th style=\"background-color:#CCCCCC;\"></th>
                 <th colspan="2">Master Summary</th>
             </tr>
         </thead>
@@ -459,7 +368,7 @@ def index():
     index_page.append("<tr><td>Nodes Total </td>\n")
     index_page.append("<td>" + str(db.compute.count()) + "</td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Storage Summary
@@ -467,7 +376,7 @@ def index():
     index_page.append("<td style=\"text-align:center;font-weight:bold;background-color:silver\">Size</td>\n")
     index_page.append("<td style=\"text-align:center;font-weight:bold;background-color:silver\">% Used</td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
@@ -495,13 +404,13 @@ def index():
     index_page.append("<tr><td>Nodes Up </td>\n")
     index_page.append("<td>" + str(db.compute.find({ "state" : "up" }).count()) + "</td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
     # Storage Summary
     storage_detail_cols("/home")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
@@ -533,13 +442,13 @@ def index():
     else:
         index_page.append("<td><span style='color:red'>" + str(num_node_docs_down) + "</td>")
 
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
     # Storage Summary
     storage_detail_cols("/home1")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
@@ -571,13 +480,13 @@ def index():
     else:
         index_page.append("<td><span style='color:red'>" + str(num_node_docs_error) + "</td>")
 
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
     # Storage Summary
     storage_detail_cols("/home2")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
@@ -610,13 +519,13 @@ def index():
     else:
         index_page.append("<td><span style='color:red'>" + str(num_node_docs_boot) + "</td>")
 
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
     # Storage Summary
     storage_detail_cols("/gscratch1")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
@@ -649,13 +558,13 @@ def index():
     else:
         index_page.append("<td><span style='color:red'>" + str(num_node_docs_orphan) + "</td>")
         
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
     # Storage Summary
     storage_detail_cols("/gscratch2")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
@@ -691,13 +600,13 @@ def index():
     index_page.append("<tr><td>Total CPU Cores </td>\n")
     index_page.append("<td>" + locale.format("%d", cpu_total, grouping=True) + "</td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
     # Storage Summary
     storage_detail_cols("/pan")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
@@ -733,13 +642,13 @@ def index():
     index_page.append("<tr><td>Total GPU Cores</td>\n")
     index_page.append("<td>" + locale.format("%0.0f", gpu_cores_total, grouping=True) + "</td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
     # Storage Summary
     storage_detail_cols("/data/sam")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
@@ -775,7 +684,7 @@ def index():
     index_page.append("<tr><td>Total System RAM </td>\n")
     index_page.append("<td>" + locale.format("%0.2f", ram_total / float(1024), grouping=True) + " TB</td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
     # Storage Summary
@@ -783,12 +692,12 @@ def index():
     index_page.append("<td>" + str(storage_totals["size"]) + " TB</td>\n")
     index_page.append("<td style=\"text-align:center;\">" + str(int(round((storage_totals["used"] / storage_totals["size"]) * 100, 0))) + "%</td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
     
     
 
@@ -808,20 +717,20 @@ def index():
     index_page.append("<tr><td>Total GPU RAM </td>\n")
     index_page.append("<td>" + locale.format("%0.2f", gpu_ram_total, grouping=True) + " GB</td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
     # Storage Summary
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
     
     
     
@@ -841,19 +750,19 @@ def index():
     index_page.append("<tr><td>Total /scratch</td>\n")
     index_page.append("<td>" + locale.format("%0.2f", scratch_total / float(1024), grouping=True) + " TB</td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
     
     # Storage Summary
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
-    index_page.append("<td style=\"background-color:#A4A4A4\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
 
 
     # Master Summary
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
-    index_page.append("<td style=\"background-color:#A4A4A4;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
+    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
 
 
 
