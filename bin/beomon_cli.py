@@ -1,9 +1,9 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon command line interface
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.3
+# Version: 1.3.1
 # Last change:
-# * Adding node journal (view only)
+# * Fixed a bug where the program crashed if the compute node did not have a journal
 
 
 
@@ -304,7 +304,7 @@ else: # Node status
             
             print "\nJournal:"
             
-            if len(doc["journal"]) > 0:
+            if "journal" in doc and len(doc["journal"]) > 0:
                 for entry in doc["journal"]:
                     print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry["time"])) + ":"
                     print re.sub("<br>", "\n", entry["entry"])
