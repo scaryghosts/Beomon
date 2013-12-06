@@ -1,9 +1,6 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
-# Description: Beomon status viewer
+# Description: Beomon Web interface
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 4.5
-# Last change:
-# * Remove "outages" code and add node state changes to the node's journal instead
 
 
 
@@ -113,7 +110,8 @@ bottle.TEMPLATE_PATH.insert(0, "/opt/sam/beomon/html/views")
     
     
 
-# Individual detail page for a node    
+# Individual detail page for a compute node
+@route("/node/<node>/")
 @route("/node/<node>")
 def show_node_page(node):
     # Did we get a proper node number?
@@ -164,7 +162,8 @@ def show_node_page(node):
 
 
 
-# Add a journal entry to a node
+# Add a journal entry to a compute node
+@post("/node/<node>/journal/")
 @post("/node/<node>/journal")
 def show_node_page(node):
     # Did we get a proper node number?
@@ -192,35 +191,75 @@ def show_node_page(node):
     
     
     
-# Individual detail page for a node    
+# Individual detail page for a head node
+@route("/head/<head>/")
 @route("/head/<head>")
 def show_head_page(head):
-    head_doc = db.head_clusman.find_one(
+    node_doc = db.head.find_one(
         {
             "_id" : head
         }
     )
     
     # Does the node exist?
-    if head_doc is None:
+    if node_doc is None:
         return "No such node"
     
     
     try:
         # Switch the processes to text rather than bool
-        for process, value in head_doc["processes"].items():
+        for process, value in node_doc["processes"].items():
             if value is True:
-                head_doc["processes"][process] = "ok"
+                node_doc["processes"][process] = "ok"
                 
             else:
-                head_doc["processes"][process] = "down"
+                node_doc["processes"][process] = "down"
                 
                 
         # Make things pretty...
-        head_doc["last_check"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(head_doc["last_check"]))
+        node_doc["last_check"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["last_check"]))
         
     except KeyError:
         return "Details missing for " + str(node)
+    
+    
+    # Output a "pretty" string of node numbers (e.g. 0-4,20-24)
+    def pretty_node_range(nodes):
+        node_highest = sorted(nodes)[-1]
+        new_node_chunk = True
+        node_chunks = ""
+
+        for num in xrange(0, 9999):
+            # If we're already above the highest node number, stop
+            if num > node_highest:
+                break
+
+
+            # Is the number one of the nodes?
+            if num in nodes:
+                if new_node_chunk == True:
+                    new_node_chunk = False
+
+                    if node_chunks == "":
+                        node_chunks += str(num)
+
+                    else:
+                        node_chunks += "," + str(num)
+
+                # Are we at the end of a chunk?
+                elif num + 1 not in nodes:
+                    node_chunks += "-" + str(num)
+
+            # No?  Mark that the next node we find is the beginning of another chunk
+            else:
+                new_node_chunk = True
+
+        return node_chunks
+    
+    
+    # Switch the node lists into pretty strings
+    node_doc["primary_of"] = pretty_node_range(node_doc["primary_of"])
+    node_doc["secondary_of"] = pretty_node_range(node_doc["secondary_of"])
         
     
     
@@ -228,7 +267,7 @@ def show_head_page(head):
     # Get any mismatched files
     #
     
-    head0a_doc = db.head_clusman.find_one(
+    head0a_doc = db.head.find_one(
         {
             "_id" : "head0a"
         },
@@ -242,7 +281,7 @@ def show_head_page(head):
     if head0a_doc is not None:
         for each_file in head0a_doc["file_hashes"]:
             try:
-                if not head0a_doc["file_hashes"][each_file] == head_doc["file_hashes"][each_file]:
+                if not head0a_doc["file_hashes"][each_file] == node_doc["file_hashes"][each_file]:
                     file_name_with_dots = re.sub(r"\[DOT\]", ".", each_file)
                     
                     bad_files.append(file_name_with_dots)
@@ -253,12 +292,44 @@ def show_head_page(head):
             
 
     # Do we have any zombies?        
-    if head_doc.get("zombies") is None:
-        head_doc["zombies"] = []
+    if node_doc.get("zombies") is None:
+        node_doc["zombies"] = []
+        
+        
+        
+    # Make a pretty timestamp in the journal entries
+    try:
+        for entry in node_doc["journal"]:
+            entry["time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry["time"]))
+                                          
+    except KeyError:
+        node_doc["journal"] = []
     
     
     
-    return bottle.template("head", head_doc=head_doc, bad_files=bad_files, zombies=head_doc["zombies"])
+    return bottle.template("head", node_doc=node_doc, bad_files=bad_files, zombies=node_doc["zombies"])
+
+
+
+
+
+# Add a journal entry to a head node
+@post("/head/<head>/journal/")
+@post("/head/<head>/journal")
+def show_head_page(head):
+    entry = request.forms.get("entry")
+    
+    # Replace newlines and line feeds with HTML's <br>
+    entry = entry.replace("\r\n", "<br>")
+    
+    db.head.update(
+        { "_id" : head },
+        { "$push" : { "journal" : { "time" : time.time(), "entry" : entry } } }
+    )
+
+
+    
+    return bottle.template("head_journal_success", head=head)
 
 
 
@@ -268,327 +339,98 @@ def show_head_page(head):
 def index():
     index_page = []
     
+    locale.setlocale(locale.LC_ALL, 'en_US')
+    
     # Main header
     index_page.append("""
     <html>
     <head>
-    <title>Frank Cluster Status</title>
-    <link href="/static/style.css" media="all" rel="stylesheet" type="text/css">
+        <title>Frank Cluster Status</title>
+        <link href="/static/style.css" media="all" rel="stylesheet" type="text/css">
+        <script src="/static/jquery.min.js" type="text/javascript"></script>
     </head>
     <body>
 
-    <script src="/static/jquery.min.js" type="text/javascript"></script>
-    """)
-
-
-
-
-
-    # Cluster summary
-    index_page.append("""
-    <center>
+    <div id="header" style="text-align:center; margin-left:auto; margin-right:auto;">
         <h2>Beomon</h2>
         <p>Node state (up, down, boot ...) is checked every 5 minutes.</p>
-    </center>
-        
-    <table id="summary" summary="Cluster Summary" class="summary">
-        <col width="15%">  <!--Compute summary-->
-        <col width="10%">
-        
-        <col>  <!--Hidden column-->
-        
-        <col width="9%">  <!--Storage summary-->
-        <col width="10%">
-        <col width="4%">
-        
-        <col>  <!--Hidden column-->
-        
-        <col width="15%">  <!--Master summary-->
-        <col width="8%">
-        <thead>
-            <tr>
-                <th colspan="2">Compute Summary</th>
-                <th style=\"background-color:#CCCCCC;\"></th>
-                <th colspan="3">Storage Summary</th>
-                <th style=\"background-color:#CCCCCC;\"></th>
-                <th colspan="2">Master Summary</th>
-            </tr>
-        </thead>
-        <tbody>
+    </div>
     """)
-
-
-
-
-
-    locale.setlocale(locale.LC_ALL, 'en_US')
-    storage_totals = {
-        "size" : 0,
-        "used" : 0,
-        "free" : 0,
-    }
-
-
-
-
-
-    # Print the storage detail columns
-    def storage_detail_cols(mount_point):
-        if os.path.ismount(mount_point):
-            fs_info = filesystem_info(mount_point)
-            size_tb = round(float(fs_info[1]) / 1024 / 1024 / 1024, 2)
-            used_tb = round(float(fs_info[2]) / 1024 / 1024 / 1024, 2)
-            free_tb = round(float(fs_info[3]) / 1024 / 1024 / 1024, 2)
-            percent_used = fs_info[4]
-            
-            storage_totals["size"] += size_tb
-            storage_totals["used"] += used_tb
-            storage_totals["free"] += free_tb
-
-            index_page.append("<td>" + mount_point + "</td>\n")
-            
-            index_page.append("<td>" + str(size_tb) + " TB</td>\n")
-            
-            index_page.append("<td style=\"text-align:center;\">" + percent_used + "</td>\n")
-            
-        else:
-            index_page.append("<td>" + mount_point + "</td>\n")
-            index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td>\n")
-            index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td>\n")
-
-
-
-
-        
-    #
-    # Row 1
-    #
-
-    # Compute Summary
-    index_page.append("<tr><td>Nodes Total </td>\n")
-    index_page.append("<td>" + str(db.compute.count()) + "</td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Storage Summary
-    index_page.append("<td style=\"text-align:center;font-weight:bold;background-color:silver\">Mount</td>\n")
-    index_page.append("<td style=\"text-align:center;font-weight:bold;background-color:silver\">Size</td>\n")
-    index_page.append("<td style=\"text-align:center;font-weight:bold;background-color:silver\">% Used</td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td><a href=\"/beomon/head/head0a\">Head0a</a></td>\n")
-    master_info = db.head_clusman.find_one({"_id" : "head0a"})
-
-    if master_info is None:
-        index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-
-    if master_info is not None:
-        if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
-        master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
-            index_page.append("<td>ok</td></tr>\n\n")
-        
-        else:
-            index_page.append("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
-
-        
+    
 
     #
-    # Row 2
+    # Summary tables
     #
-
-    # Compute Summary
-    index_page.append("<tr><td>Nodes Up </td>\n")
-    index_page.append("<td>" + str(db.compute.find({ "state" : "up" }).count()) + "</td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-    # Storage Summary
-    storage_detail_cols("/home")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td><a href=\"/beomon/head/head0b\">Head0b</a>\n")
-    master_info = db.head_clusman.find_one({"_id" : "head0b"})
-
-    if master_info is None:
-        index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-
-    if master_info is not None:
-        if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
-        master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
-            index_page.append("<td>ok</td></tr>\n\n")
-            
-        else:
-            index_page.append("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
-
-
-
+    
+    index_page.append("""
+    <!-- Outer div to contain the summary tables -->
+    <div id="summary_outer" style="text-align:center; margin-left:auto; margin-right:auto;display:block;width:500px;">
+    """)
+    
+    
     #
-    # Row 3
+    # Summary table: Compute summary
     #
-
-    # Compute Summary
-    index_page.append("<tr><td>Nodes Down </td>\n")
+    index_page.append("""
+        <!-- Inner div containing the compute summary -->
+        <div id="compute_summary" style="display:inline;float:left; width:45%;">
+            <table>
+                <thead>
+                    <th colspan="2">Compute Summary</th>
+                </thead>
+                <tbody>
+    """)
+    
+    index_page.append("""
+    <tr>
+        <td>Nodes Total</td>
+        <td>""" + str(db.compute.count()) + """</td>
+    </tr>
+    """)
+    
+    
+    index_page.append("""
+    <tr>
+        <td>Nodes Up</td>
+        <td>""" + str(db.compute.find({ "state" : "up" }).count()) + """</td>
+    </tr>
+    """)
+    
+    
+    index_page.append("    <tr><td>Nodes Down</td>\n")
     num_node_docs_down = db.compute.find({ "state" : "down" }).count()
     if num_node_docs_down == 0:
-        index_page.append("<td>0</td>\n")
+        index_page.append("        <td>0</td>\n    </tr>")
     else:
-        index_page.append("<td><span style='color:red'>" + str(num_node_docs_down) + "</td>")
-
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-    # Storage Summary
-    storage_detail_cols("/home1")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td><a href=\"/beomon/head/head1a\">Head1a</a>\n")
-    master_info = db.head_clusman.find_one({"_id" : "head1a"})
-
-    if master_info is None:
-        index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-
-    if master_info is not None:
-        if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
-        master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
-            index_page.append("<td>ok</td></tr>\n\n")
-            
-        else:
-            index_page.append("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
-
-
-
-    #
-    # Row 4
-    #
-
-    # Compute Summary
-    index_page.append("<tr><td>Nodes Error</td>\n")
+        index_page.append("        <td><span style='color:red'>" + str(num_node_docs_down) + "</td>\n    </tr>\n")
+    
+    
+    index_page.append("    <tr><td>Nodes Error</td>\n")
     num_node_docs_error = db.compute.find({ "state" : "error" }).count()
     if num_node_docs_error == 0:
-        index_page.append("<td>0</td>\n")
+        index_page.append("        <td>0</td>\n    </tr>\n")
     else:
-        index_page.append("<td><span style='color:red'>" + str(num_node_docs_error) + "</td>")
-
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-    # Storage Summary
-    storage_detail_cols("/home2")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td><a href=\"/beomon/head/head1b\">Head1b</a>\n")
-    master_info = db.head_clusman.find_one({"_id" : "head1b"})
-
-    if master_info is None:
-        index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-
-    if master_info is not None:
-        if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
-        master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
-            index_page.append("<td>ok</td></tr>\n\n")
-            
-        else:
-            index_page.append("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
-
-
-        
-    #
-    # Row 5
-    #
-
-    # Compute Summary
-    index_page.append("<tr><td>Nodes Booting </td>\n")
+        index_page.append("        <td><span style='color:red'>" + str(num_node_docs_error) + "</td>\n    </tr>\n")
+    
+    
+    index_page.append("    <tr>\n        <td>Nodes Booting</td>\n")
     num_node_docs_boot = db.compute.find({ "state" : "boot" }).count()
     if num_node_docs_boot == 0:
-        index_page.append("<td>0</td>\n")
+        index_page.append("        <td>0</td>\n    </tr>\n")
         
     else:
-        index_page.append("<td><span style='color:red'>" + str(num_node_docs_boot) + "</td>")
-
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-    # Storage Summary
-    storage_detail_cols("/gscratch1")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td><a href=\"/beomon/head/head2a\">Head2a</a>\n")
-    master_info = db.head_clusman.find_one({"_id" : "head2a"})
-
-    if master_info is None:
-        index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-
-    if master_info is not None:
-        if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
-        master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
-            index_page.append("<td>ok</td></tr>\n\n")
-            
-        else:
-            index_page.append("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
-
-
+        index_page.append("        <td><span style='color:red'>" + str(num_node_docs_boot) + "</td>\n    </tr>\n")
         
-    #
-    # Row 6
-    #
-
-    # Compute Summary
-    index_page.append("<tr><td>Nodes Orphaned </td>\n")
+    
+    index_page.append("    <tr>\n        <td>Nodes Orphaned</td>\n")
     num_node_docs_orphan = db.compute.find({ "state" : "orphan" }).count()
     if num_node_docs_orphan == 0:
-        index_page.append("<td>0</td>\n")
+        index_page.append("        <td>0</td>\n    </tr>\n")
         
     else:
-        index_page.append("<td><span style='color:red'>" + str(num_node_docs_orphan) + "</td>")
+        index_page.append("        <td><span style='color:red'>" + str(num_node_docs_orphan) + "</td>\n    </tr>\n")
         
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-    # Storage Summary
-    storage_detail_cols("/gscratch2")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td><a href=\"/beomon/head/head2b\">Head2b</a>\n")
-    master_info = db.head_clusman.find_one({"_id" : "head2b"})
-
-    if master_info is None:
-        index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-
-    if master_info is not None:
-        if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
-        master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
-            index_page.append("<td>ok</td></tr>\n\n")
-            
-        else:
-            index_page.append("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
-
-
-        
-    #
-    # Row 7
-    #
-
-    # Compute Summary
+    
     cpu_total = 0
     for node_doc in db.compute.find({}, { "cpu" : 1}):
         try:
@@ -597,40 +439,10 @@ def index():
         except KeyError:
             pass
 
-    index_page.append("<tr><td>Total CPU Cores </td>\n")
-    index_page.append("<td>" + locale.format("%d", cpu_total, grouping=True) + "</td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-    # Storage Summary
-    storage_detail_cols("/pan")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td><a href=\"/beomon/head/head3a\">Head3a</a>\n")
-    master_info = db.head_clusman.find_one({"_id" : "head3a"})
-
-    if master_info is None:
-        index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-
-    if master_info is not None:
-        if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
-        master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
-            index_page.append("<td>ok</td></tr>\n\n")
-            
-        else:
-            index_page.append("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
-
-
-        
-    #
-    # Row 8
-    #
-
-    # Compute Summary
+    index_page.append("    <tr>\n        <td>Total CPU Cores</td>\n")
+    index_page.append("        <td>" + locale.format("%d", cpu_total, grouping=True) + "</td>\n    </tr>\n")
+    
+    
     gpu_cores_total = 0
     for node_doc in db.compute.find({}, { "gpu" : 1 }):
         try:
@@ -639,40 +451,10 @@ def index():
         except KeyError:
             pass
             
-    index_page.append("<tr><td>Total GPU Cores</td>\n")
-    index_page.append("<td>" + locale.format("%0.0f", gpu_cores_total, grouping=True) + "</td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-    # Storage Summary
-    storage_detail_cols("/data/sam")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td><a href=\"/beomon/head/head3b\">Head3b</a>\n")
-    master_info = db.head_clusman.find_one({"_id" : "head3b"})
-
-    if master_info is None:
-        index_page.append("<td style=\"font-weight:bold;color:red;\">Unknown</td></td></tr>\n\n")
-
-    if master_info is not None:
-        if master_info["processes"]["beoserv"] is True and master_info["processes"]["kickbackdaemon"] is True and\
-        master_info["processes"]["bpmaster"] is True and master_info["processes"]["recvstats"] is True:
-            index_page.append("<td>ok</td></tr>\n\n")
-            
-        else:
-            index_page.append("<td style=\"font-weight:bold;color:red\">Down</td></tr>\n\n")
-            
-            
-            
-    #
-    # Row 9
-    #
-
-    # Compute Summary
+    index_page.append("    <tr>\n        <td>Total GPU Cores</td>\n")
+    index_page.append("        <td>" + locale.format("%0.0f", gpu_cores_total, grouping=True) + "</td>\n    </tr>\n")
+    
+    
     ram_total = 0
     for node_doc in db.compute.find({}, { "ram" : 1 }):
         try:
@@ -681,31 +463,10 @@ def index():
         except KeyError:
             pass
             
-    index_page.append("<tr><td>Total System RAM </td>\n")
-    index_page.append("<td>" + locale.format("%0.2f", ram_total / float(1024), grouping=True) + " TB</td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-    # Storage Summary
-    index_page.append("<td style=\"text-align:center\">Total:</td>\n")
-    index_page.append("<td>" + str(storage_totals["size"]) + " TB</td>\n")
-    index_page.append("<td style=\"text-align:center;\">" + str(int(round((storage_totals["used"] / storage_totals["size"]) * 100, 0))) + "%</td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
+    index_page.append("    <tr>\n        <td>Total System RAM</td>\n")
+    index_page.append("        <td>" + locale.format("%0.2f", ram_total / float(1024), grouping=True) + " TB</td>\n    </tr>\n")
     
     
-
-    #
-    # Row 10
-    #
-
-    # Compute Summary
     gpu_ram_total = 0
     for node_doc in db.compute.find({}, { "gpu" : 1 }):
         try:
@@ -714,31 +475,10 @@ def index():
         except KeyError:
             pass
             
-    index_page.append("<tr><td>Total GPU RAM </td>\n")
-    index_page.append("<td>" + locale.format("%0.2f", gpu_ram_total, grouping=True) + " GB</td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-    # Storage Summary
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
+    index_page.append("    <tr>\n        <td>Total GPU RAM</td>\n")
+    index_page.append("        <td>" + locale.format("%0.2f", gpu_ram_total, grouping=True) + " GB</td>\n    </tr>\n")
     
     
-    
-    #
-    # Row 11
-    #
-    
-    # Compute Summary
     scratch_total = 0
     for node_doc in db.compute.find().sort("_id", 1):
         try:
@@ -747,40 +487,216 @@ def index():
         except KeyError:
             pass
             
-    index_page.append("<tr><td>Total /scratch</td>\n")
-    index_page.append("<td>" + locale.format("%0.2f", scratch_total / float(1024), grouping=True) + " TB</td>\n")
-
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
+    index_page.append("    <tr>\n        <td>Total /scratch</td>\n")
+    index_page.append("        <td>" + locale.format("%0.2f", scratch_total / float(1024), grouping=True) + " TB</td>\n    </tr>\n")
     
-    # Storage Summary
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
+    
+    # End of compute summary table
+    index_page.append("""
+                </tbody>
+            </table>
+        </div> <!-- compute_summary -->
+    """)
+    
+    
+    # Add space between the compute summary ad storage summary tables
+    index_page.append("""
+        <div id="summary_spacer" style="display:block;float:center; width:10%;">
+        </div>
+    """)
+    
+    
+    
+    #
+    # Summary table: Storage summary
+    #
+    
+    storage_totals = {
+        "size" : 0,
+        "used" : 0,
+        "free" : 0,
+    }
+    
+    
+    index_page.append("""
+        <!-- Inner div containing the storage summary -->
+        <div id="storage_summary" style="display:inline;float:right; width:45%;">
+            <table>
+                <thead>
+                    <tr>
+                        <th colspan="3">Storage Summary</th>
+                    </tr>
+                    <tr>
+                        <th>Mount</th>
+                        <th>Size</th>
+                        <th>% Used</th>
+                </thead>
+                <tbody>
+    """)
+    
+    
+    for mount_point in ["/home", "/home1", "/home2", "/gscratch1", "/gscratch2", "/pan", "/data/sam"]:
+        if os.path.ismount(mount_point):
+            fs_info = filesystem_info(mount_point)
+            size_gb = round(float(fs_info[1]) / 1024 / 1024, 2)
+            used_gb = round(float(fs_info[2]) / 1024 / 1024, 2)
+            free_gb = round(float(fs_info[3]) / 1024 / 1024, 2)
+            percent_used = fs_info[4]
+            
+            storage_totals["size"] += size_gb
+            storage_totals["used"] += used_gb
+            storage_totals["free"] += free_gb
 
-    index_page.append("<td style=\"background-color:#CCCCCC\"></td>\n")
-
-
-    # Master Summary
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-    index_page.append("<td style=\"background-color:#CCCCCC;\"></td>\n")
-
-
-
+            index_page.append("    <tr>\n        <td>" + mount_point + "</td>\n")
+            
+            index_page.append("        <td>" + str(round(size_gb / 1024, 2)) + " TB</td>\n")
+            
+            index_page.append("        <td style=\"text-align:center;\">" + percent_used + "</td>\n    </tr>\n")
+            
+        else:
+            index_page.append("    <tr>\n        <td>" + mount_point + "</td>\n")
+            index_page.append("        <td style=\"font-weight:bold;color:red;\">Unknown</td>\n")
+            index_page.append("        <td style=\"font-weight:bold;color:red;\">Unknown</td>\n    </tr>\n")
+            
+    index_page.append("<tr><td style=\"text-align:center\">Total:</td>\n")
+    index_page.append("<td>" + str(round(storage_totals["size"] / 1024, 2)) + " TB</td>\n")
+    used_tb = storage_totals["used"] / 1024
+    size_tb = storage_totals["size"] / 1024
+    index_page.append("<td style=\"text-align:center;\">" + str(int(round(used_tb / size_tb * 100))) + "%</td></tr>")
+                                                                          
+        
+        
+    # End of storage summary table
+    index_page.append("""
+                </tbody>
+            </table>
+        </div> <!-- storage_summary -->
+    """)
+    
+    
+    # End of summary tables
+    index_page.append("""
+    </div> <!-- summary_outer -->
+    """)
+    
+    
+    
+    #
+    # Start of detail tables
+    #
+    index_page.append("""
+    <!-- Outer div to contain the summary tables -->
+    <div id="detail_outer" style="text-align:center; margin-left:auto; margin-right:auto;display:block;width:500px;clear:both;padding-top:25px;">
+    """)
+    
+    
+    
+    #
+    # Master node detail table
+    #
+    index_page.append("""
+    <!-- Inner div containing the master node detail table -->
+    <div id="master_detail" style="text-align:center; margin-left:auto; margin-right:auto; display:block;">
+    <table id="master" style="text-align:center;">
+        <thead>
+            <tr>
+                <th colspan="8">Master Node Details</th>
+            </tr>
+            <tr>
+                <th scope="col">Node</th>
+                <th scope="col">Processes</th>
+                <th scope="col">Configs</th>
+                <th scope="col">Nodes Up</th>
+                <th scope="col">Nodes Down</th>
+                <th scope="col">Nodes Error</th>
+                <th scope="col">Nodes Booting</th>
+                <th scope="col">Nodes Orphaned</th>
+            </tr>
+        </thead>
+        <tbody>
+    """)
+    
+    
+    # Loop through each node in the DB
+    for node_doc in db.head.find().sort("_id", 1):
+        #
+        # Node
+        #
+        
+        index_page.append("<tr>\n<td><a href=\"/beomon/head/" + node_doc["_id"] +"\">" + node_doc["_id"] + "</a></td>\n")
+        
+        
+        #
+        # Processes
+        #
+        
+        if "processes" not in node_doc:
+            index_page.append("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
+            
+        else:
+            processes_ok = True
+            
+            for process in node_doc["processes"]:
+                if process is not True:
+                    processes_ok == False
+                    
+            if processes_ok is True:
+                index_page.append("<td>ok</td>\n")
+            
+            else:
+                index_page.append("<td style=\"font-weight:bold;color:red;\">down</td>\n")
+                
+                
+        #
+        # Configs
+        #
+        
+        if "configs_ok" not in node_doc:
+            index_page.append("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
+            
+        else:
+            if node_doc["configs_ok"] is True:
+                index_page.append("<td>ok</td>\n")
+            
+            else:
+                index_page.append("<td style=\"font-weight:bold;color:red;\">down</td>\n")
+                
+                
+                
+        #
+        # Nodes state counts
+        #
+        
+        index_page.append("<td>" + str(node_doc["num_state"]["up"]) + "</td>\n")
+        index_page.append("<td>" + str(node_doc["num_state"]["down"]) + "</td>\n")
+        index_page.append("<td>" + str(node_doc["num_state"]["error"]) + "</td>\n")
+        index_page.append("<td>" + str(node_doc["num_state"]["boot"]) + "</td>\n")
+        index_page.append("<td>" + str(node_doc["num_state"]["orphan"]) + "</td>\n")
+    
+    
+    
+    # End of master detail table
     index_page.append("""
         </tbody>
     </table>
-    <br>
-    <br>
+    </div> <!-- master_detail -->
     """)
+    
 
 
+    #
+    # Compute node detail table
+    #
 
-
-
-    # Node table header
+    # Compute node detail table header
     index_page.append("""
-    <table id="nodes" summary="Node status" class="compute_nodes">
+    <!-- Inner div containing the compute detail table -->
+    <div id="compute_detail" style="text-align:center; margin-left:auto; margin-right:auto; display:block;padding-top:25px;">
+    <table id="nodes" style="text-align:center;">
         <thead>
+            <tr>
+                <th colspan="6">Compute Node Details</th>
+            </tr>
             <tr>
                 <th scope="col">Node</th>
                 <th scope="col">State</th>
@@ -840,9 +756,18 @@ def index():
         # Stale data?
         #
         
-        if int(time.time()) - node_doc["last_check"] > 60 * 30:
+        try:
+            if int(time.time()) - node_doc["last_check"] > 60 * 30:
+                for _ in range(1): index_page.append("<td></td>\n")
+                index_page.append("<td style=\"font-weight:bold;color:red;\">Stale data</td>\n")
+                for _ in range(2): index_page.append("<td></td>\n")
+                
+                continue
+        
+        except KeyError:
+            # We'll get here if the node never checked in but a master node added its rack location and state
             for _ in range(1): index_page.append("<td></td>\n")
-            index_page.append("<td style=\"font-weight:bold;color:red;\">Stale data</td>\n")
+            index_page.append("<td style=\"font-weight:bold;color:red;\">Missing data</td>\n")
             for _ in range(2): index_page.append("<td></td>\n")
             
             continue
@@ -946,14 +871,26 @@ def index():
             
             
         index_page.append("</tr>\n")
-
-
+        
+        
+    # End of compute detail table
+    index_page.append("""
+        </tbody>
+    </table>
+    </div> <!-- compute_detail -->
+    """)
+    
+    
+        
+    # End of detail tables
+    index_page.append("""
+    </div> <!-- detail_outer -->
+    """)
 
 
 
     # Footer
-    index_page.append("""    </tbody>
-    </table>
+    index_page.append("""
     <script src="/static/jquery.stickytableheaders.js" type="text/javascript"></script> 
 
     <script type="text/javascript">

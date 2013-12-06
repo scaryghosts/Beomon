@@ -11,11 +11,6 @@
 
 
 /* General */
-tr:nth-child(odd) {
-    background: gainsboro;
-}
-
-
 body {
     background-color: #CCCCCC;
 }
@@ -32,77 +27,42 @@ body {
 
 
 
-/* Compute nodes */
-table.compute_nodes {
+/* Tables */
+table {
     margin: auto;
     background: whitesmoke;
     border-collapse: collapse;
 }
 
-table.compute_nodes th, table.compute_nodes thead th, table.compute_nodes thead td {
+table th, table thead th, table thead td {
     border: 1px silver;
-    text-align: center;
+/*     text-align: center; */
     padding: 0.4em;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 15px;
 }
 
-table.compute_nodes td {
+table td {
     border: 1px silver;
-    text-align: center;
+/*     text-align: center; */
     padding: 0.2em;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 14px;
 }
 
-table.compute_nodes th {
+table th {
     background: #bcbfc2;
 }
 
-table.compute_nodes tr:hover td {
+table tr:hover td {
    background: mintcream !important;
 }
 
-table.compute_nodes caption {
-    margin-left: inherit;
-    margin-right: inherit;
+table tr:nth-child(odd) {
+    background: gainsboro;
 }
 
-
-
-
-
-/* Summary */
-table.summary {
-    margin: auto;
-    background: whitesmoke;
-    border-collapse: collapse;
-    width: 100px;
-}
-
-table.summary th, table.summary thead th, table.summary thead td {
-    border: 1px silver;
-    text-align: center;
-    padding: 0.4em;
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 15px;
-    white-space:nowrap;
-}
-
-table.summary td {
-    border: 1px silver;
-    text-align: left;
-    padding: 0.2em;
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 14px;
-    white-space:nowrap;
-}
-
-table.summary th {
-    background: #bcbfc2;
-}
-
-table.summary caption {
+table caption {
     margin-left: inherit;
     margin-right: inherit;
 }

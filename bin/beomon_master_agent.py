@@ -1,9 +1,6 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon master agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.4
-# Last change:
-# * Remove "outages" code and add node state changes to the node's journal instead
 
 
 
@@ -169,15 +166,15 @@ for pid in [pid for pid in os.listdir('/proc') if pid.isdigit()]:
 
 
 # Are the processes we want alive?
-new_head_clusman_data = {}
+new_master_data = {}
 for proc_name in ["beoserv", "bpmaster", "recvstats", "kickbackdaemon"]:
     if "/usr/sbin/" + proc_name in processes:
-        new_head_clusman_data["processes." + proc_name] = True
+        new_master_data["processes." + proc_name] = True
         
     else:
         sys.stdout.write(red + "Process " + proc_name + " not found!\n" + endcolor)
         
-        new_head_clusman_data["processes." + proc_name] = False
+        new_master_data["processes." + proc_name] = False
         
 
 del processes
@@ -187,61 +184,79 @@ del processes
 
     
 # Determine our partner and note what nodes we are responible for
-if hostname == "head0a.frank.sam.pitt.edu":
+if hostname == "head0a-dev.francis.sam.pitt.edu":
+    partner = "head0b-dev.francis.sam.pitt.edu"
+    
+    new_master_data["compute_node_class"] = "Foo"
+    new_master_data["primary_of"] = range(0,3 + 1)
+    new_master_data["secondary_of"] = range(4, 7 + 1)
+    
+elif hostname == "head0b-dev.francis.sam.pitt.edu":
+    partner = "head0a-dev.francis.sam.pitt.edu"
+    
+    new_master_data["compute_node_class"] = "Bar"
+    new_master_data["primary_of"] = range(4, 7 + 1)
+    new_master_data["secondary_of"] = range(0, 3 + 1)
+    
+elif hostname == "head0a.frank.sam.pitt.edu":
     partner = "head0b.frank.sam.pitt.edu"
     
-    new_head_clusman_data["compute_node_class"] = "Original Frank and Fermi Penguin"
-    new_head_clusman_data["primary_of"] = "0-112,153-158"
-    new_head_clusman_data["secondary_of"] = "113-152,159-176"
+    new_master_data["compute_node_class"] = "Original Frank and Fermi Penguin"
+    new_master_data["primary_of"] = range(0, 112 + 1)
+    new_master_data["primary_of"] += range(153, 158 + 1)
+    new_master_data["secondary_of"] = range(113, 152 + 1)
+    new_master_data["secondary_of"] += range(159, 176 + 1)
     
 elif hostname == "head0b.frank.sam.pitt.edu":
     partner = "head0a.frank.sam.pitt.edu"
     
-    new_head_clusman_data["compute_node_class"] = "Original Frank and Fermi Penguin"
-    new_head_clusman_data["primary_of"] = "113-152,159-176"
-    new_head_clusman_data["secondary_of"] = "0-112,153-158"
+    new_master_data["compute_node_class"] = "Original Frank and Fermi Penguin"
+    new_master_data["primary_of"] = range(113, 152 + 1)
+    new_master_data["primary_of"] += range(159, 176 + 1)
+    new_master_data["secondary_of"] = range(0, 112 + 1)
+    new_master_data["secondary_of"] += range(153, 158 + 1)
     
 elif hostname == "head1a.frank.sam.pitt.edu":
     partner = "head1b.frank.sam.pitt.edu"
     
-    new_head_clusman_data["compute_node_class"] = "IBM"
-    new_head_clusman_data["primary_of"] = "177-223"
-    new_head_clusman_data["secondary_of"] = "224-241"
+    new_master_data["compute_node_class"] = "IBM"
+    new_master_data["primary_of"] = range(177, 223 + 1)
+    new_master_data["secondary_of"] = range(224, 241 + 1)
     
 elif hostname == "head1b.frank.sam.pitt.edu":
     partner = "head1a.frank.sam.pitt.edu"
     
-    new_head_clusman_data["compute_node_class"] = "IBM"
-    new_head_clusman_data["primary_of"] = "224-241"
-    new_head_clusman_data["secondary_of"] = "177-223"
+    new_master_data["compute_node_class"] = "IBM"
+    new_master_data["primary_of"] = range(224, 241 + 1)
+    new_master_data["secondary_of"] = range(177, 223 + 1)
     
 elif hostname == "head2a.frank.sam.pitt.edu":
     partner = "head2b.frank.sam.pitt.edu"
     
-    new_head_clusman_data["compute_node_class"] = "Intel Sandybridge"
-    new_head_clusman_data["primary_of"] = "242-278"
-    new_head_clusman_data["secondary_of"] = "279-324"
+    new_master_data["compute_node_class"] = "Intel Sandybridge"
+    new_master_data["primary_of"] = range(242, 278 + 1)
+    new_master_data["secondary_of"] = range(279, 324 + 1)
     
 elif hostname == "head2b.frank.sam.pitt.edu":
     partner = "head2a.frank.sam.pitt.edu"
     
-    new_head_clusman_data["compute_node_class"] = "Intel Sandybridge"
-    new_head_clusman_data["primary_of"] = "279-324"
-    new_head_clusman_data["secondary_of"] = "242-278"
+    new_master_data["compute_node_class"] = "Intel Sandybridge"
+    new_master_data["primary_of"] = range(279, 324 + 1)
+    new_master_data["secondary_of"] = range(242, 278 + 1)
     
 elif hostname == "head3a.frank.sam.pitt.edu":
     partner = "head3b.frank.sam.pitt.edu"
     
-    new_head_clusman_data["compute_node_class"] = "AMD Interlagos"
-    new_head_clusman_data["primary_of"] = "325-350"
-    new_head_clusman_data["secondary_of"] = "351-378"
+    new_master_data["compute_node_class"] = "AMD Interlagos"
+    new_master_data["primary_of"] = range(325, 350 + 1)
+    new_master_data["secondary_of"] = range(351, 378 + 1)
     
 elif hostname == "head3b.frank.sam.pitt.edu":
     partner = "head3a.frank.sam.pitt.edu"
     
-    new_head_clusman_data["compute_node_class"] = "AMD Interlagos"
-    new_head_clusman_data["primary_of"] = "351-378"
-    new_head_clusman_data["secondary_of"] = "325-350"
+    new_master_data["compute_node_class"] = "AMD Interlagos"
+    new_master_data["primary_of"] = range(351, 378 + 1)
+    new_master_data["secondary_of"] = range(325, 350 + 1)
     
     
     
@@ -252,7 +267,7 @@ elif hostname == "head3b.frank.sam.pitt.edu":
 #
 
 # Get head0a's config file hashes
-head0a_doc = db.head_clusman.find_one(
+head0a_doc = db.head.find_one(
     {
         "_id" : "head0a"
     },
@@ -324,34 +339,19 @@ for _, each_file in hash_files.items():
     each_file_handle.close()
     
     
-new_head_clusman_data["file_hashes"] = local_file_hashes
+new_master_data["file_hashes"] = local_file_hashes
 
 
 if found_mismatched_file is True:
+    new_master_data["configs_ok"] = False
+    
     syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: One or more configuration files do not match head0a")
+    
+else:
+    new_master_data["configs_ok"] = True
 
 
     
-# Report that we've now checked ourself
-new_head_clusman_data["last_check"] = int(time.time())
-    
-    
-    
-# Update the head_clusman collection
-db.head_clusman.update(
-    {
-        "_id" : hostname.split(".")[0]
-    },
-    {
-        "$set" : new_head_clusman_data
-    },
-    upsert = True,
-)
-
-del(new_head_clusman_data)
-
-
-
 
 
 #
@@ -931,6 +931,31 @@ elif num_state["pbs_offline"] > 0:
 sys.stdout.write(str(num_state["partnered"]) + " nodes in state 'partnered'\n")
     
 sys.stdout.write(str(num_state["up"]) + " nodes in state 'up'\n")
+
+
+
+# Add the number of nodes in each state to our doc
+new_master_data["num_state"] = num_state
+
+
+
+# Report that we've now checked ourself
+new_master_data["last_check"] = int(time.time())
+    
+    
+    
+# Update the master collection
+db.head.update(
+    {
+        "_id" : hostname.split(".")[0]
+    },
+    {
+        "$set" : new_master_data
+    },
+    upsert = True,
+)
+
+del(new_master_data)
 
 
 

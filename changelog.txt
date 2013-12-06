@@ -1,0 +1,18 @@
+2013-12-5: Verison 5
+* Move change logs and version information out of individual files and into a central change log
+
+* Remove lots of depreciated HTML4 stuff in the Web GUI
+
+* Use divs and CSS to position and size the tables in the Web GUI
+
+* Remove the summary table of head nodes in the Web GUI
+
+* Add a detail table for the head nodes in the Web GUI
+
+* Switch the head nodes' DB collection name to "head"
+
+* Change "primary_of" and "secondary_of" details of head node to a list if ints
+
+* Add journal feature to the head nodes
+
+* Removed zombie checker feature

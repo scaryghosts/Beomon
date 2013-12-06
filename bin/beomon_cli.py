@@ -1,9 +1,6 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon command line interface
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 1.3.1
-# Last change:
-# * Fixed a bug where the program crashed if the compute node did not have a journal
 
 
 
@@ -206,7 +203,7 @@ else: # Node status
                 }
             )
         else:
-            doc = db.head_clusman.find_one(
+            doc = db.head.find_one(
                 {
                     "_id" : node
                 }
@@ -340,6 +337,45 @@ else: # Node status
             # Print the basic information of the node
             #
             
+            # Output a "pretty" string of node numbers (e.g. 0-4,20-24)
+            def pretty_node_range(nodes):
+                node_highest = sorted(nodes)[-1]
+                new_node_chunk = True
+                node_chunks = ""
+
+                for num in xrange(0, 9999):
+                    # If we're already above the highest node number, stop
+                    if num > node_highest:
+                        break
+
+
+                    # Is the number one of the nodes?
+                    if num in nodes:
+                        if new_node_chunk == True:
+                            new_node_chunk = False
+
+                            if node_chunks == "":
+                                node_chunks += str(num)
+
+                            else:
+                                node_chunks += "," + str(num)
+
+                        # Are we at the end of a chunk?
+                        elif num + 1 not in nodes:
+                            node_chunks += "-" + str(num)
+
+                    # No?  Mark that the next node we find is the beginning of another chunk
+                    else:
+                        new_node_chunk = True
+
+                return node_chunks
+            
+            
+            # Switch the node lists into pretty strings
+            doc["primary_of"] = pretty_node_range(doc["primary_of"])
+            doc["secondary_of"] = pretty_node_range(doc["secondary_of"])
+                
+            
             print "Compute class: " + doc["compute_node_class"]
             print "Primary of: " + doc["primary_of"]
             print "Secondary of: " + doc["secondary_of"]
@@ -352,7 +388,7 @@ else: # Node status
             
             print ""
             
-            head0a_doc = db.head_clusman.find_one(
+            head0a_doc = db.head.find_one(
                 {
                     "_id" : "head0a"
                 },
@@ -381,24 +417,17 @@ else: # Node status
                 print "File mismatch check: ok"
             
             
-            
             #
-            # Print any zombies found
+            # Print the node's journal
             #
             
-            print ""
-            print "Zombie Processes:"
+            print "\nJournal:"
             
-            if len(doc["zombies"]) == 0:
-                print "     No zombies found"
+            if "journal" in doc and len(doc["journal"]) > 0:
+                for entry in doc["journal"]:
+                    print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry["time"])) + ":"
+                    print re.sub("<br>", "\n", entry["entry"])
+                    print "----------------------------------"
                 
             else:
-                for zombie in doc["zombies"]:
-                    print "     Node: " + zombie["node"]
-                    print "     PID: " + zombie["PID"]
-                    print "     User: " + zombie["user"]
-                    print "     Command: " + zombie["command"]
-                    print ""
-                    
-                    
-            print "-----     -----     -----"
+                print "No journal entries"

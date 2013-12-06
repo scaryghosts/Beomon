@@ -1,9 +1,6 @@
 #!/opt/sam/python/2.7.5/gcc447/bin/python
 # Description: Beomon compute node agent
 # Written by: Jeff White of the University of Pittsburgh (jaw171@pitt.edu)
-# Version: 2.2.5
-# Last change: 
-# * Fixed a bug in check_missing_parts() where previous node data did not exist
 
 
 
