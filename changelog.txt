@@ -1,4 +1,11 @@
-2013-12-5: Verison 5
+2013-12-6: Version 5.0.1
+* Added load average to head nodes
+
+* Minor width change of journal entries in the GUI
+
+
+
+2013-12-5: Version 5
 * Move change logs and version information out of individual files and into a central change log
 
 * Remove lots of depreciated HTML4 stuff in the Web GUI

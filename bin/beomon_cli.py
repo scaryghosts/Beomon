@@ -332,6 +332,12 @@ else: # Node status
             else:
                 print red + "State: fail" + endcolor
                 
+                
+            # Display the load average
+            print "Load average 1 minute: " + doc["loadavg"]["1"]
+            print "Load average 5 minutes: " + doc["loadavg"]["5"]
+            print "Load average 15 minutes: " + doc["loadavg"]["15"]
+                
             
             #
             # Print the basic information of the node

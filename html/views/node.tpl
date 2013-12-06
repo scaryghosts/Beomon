@@ -94,7 +94,7 @@
         <span style="font-weight:bold;">Journal:</span>
         %if len(node_doc["journal"]) > 0:
             %for entry in node_doc["journal"]:
-                <div style="text-align: left; max-width: 300px;">
+                <div style="text-align: left; max-width: 600px;">
                     <div>
                         {{ entry["time"] }}:
                     </div>

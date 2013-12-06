@@ -31,6 +31,11 @@
             <span style="color:red">State: fail</span><br>
             
         %end
+        
+        
+        Load average 1 minute: {{ node_doc["loadavg"]["1"] }}<br>
+        Load average 5 minutes: {{ node_doc["loadavg"]["5"] }}<br>
+        Load average 15 minutes: {{ node_doc["loadavg"]["15"] }}<br>
                 
         
         <!-- Basic information of the node -->
@@ -62,7 +67,7 @@
         <span style="font-weight:bold;">Journal:</span>
         %if len(node_doc["journal"]) > 0:
             %for entry in node_doc["journal"]:
-                <div style="text-align: left; max-width: 300px;">
+                <div style="text-align: left; max-width: 600px;">
                     <div>
                         {{ entry["time"] }}:
                     </div>

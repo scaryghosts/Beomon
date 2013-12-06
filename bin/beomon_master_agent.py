@@ -144,6 +144,20 @@ except:
 # Check our own health
 #
 
+new_master_data = {}
+
+# Get the current load average
+load_avg_data = open("/proc/loadavg", "r").read()
+new_master_data["loadavg"] = {}
+new_master_data["loadavg"]["1"] = load_avg_data.split()[0]
+new_master_data["loadavg"]["5"] = load_avg_data.split()[1]
+new_master_data["loadavg"]["15"] = load_avg_data.split()[2]
+
+print "Load average 1 minute: " + new_master_data["loadavg"]["1"]
+print "Load average 5 minutes: " + new_master_data["loadavg"]["5"]
+print "Load average 15 minutes: " + new_master_data["loadavg"]["15"]
+
+
 # Get the list of current processes
 processes = []
 for pid in [pid for pid in os.listdir('/proc') if pid.isdigit()]:
@@ -166,7 +180,6 @@ for pid in [pid for pid in os.listdir('/proc') if pid.isdigit()]:
 
 
 # Are the processes we want alive?
-new_master_data = {}
 for proc_name in ["beoserv", "bpmaster", "recvstats", "kickbackdaemon"]:
     if "/usr/sbin/" + proc_name in processes:
         new_master_data["processes." + proc_name] = True

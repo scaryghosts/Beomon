@@ -586,7 +586,7 @@ def index():
     #
     index_page.append("""
     <!-- Outer div to contain the summary tables -->
-    <div id="detail_outer" style="text-align:center; margin-left:auto; margin-right:auto;display:block;width:500px;clear:both;padding-top:25px;">
+    <div id="detail_outer" style="text-align:center; margin-left:auto; margin-right:auto;display:block;width:600px;clear:both;padding-top:25px;">
     """)
     
     
@@ -600,12 +600,13 @@ def index():
     <table id="master" style="text-align:center;">
         <thead>
             <tr>
-                <th colspan="8">Master Node Details</th>
+                <th colspan="9">Master Node Details</th>
             </tr>
             <tr>
                 <th scope="col">Node</th>
                 <th scope="col">Processes</th>
                 <th scope="col">Configs</th>
+                <th scope="col">Load Average</th>
                 <th scope="col">Nodes Up</th>
                 <th scope="col">Nodes Down</th>
                 <th scope="col">Nodes Error</th>
@@ -661,6 +662,11 @@ def index():
             else:
                 index_page.append("<td style=\"font-weight:bold;color:red;\">down</td>\n")
                 
+                
+        #
+        # Load average
+        #
+        index_page.append("<td>" + node_doc["loadavg"]["1"] + "<br>" + node_doc["loadavg"]["5"] + "<br>" + node_doc["loadavg"]["15"] + "</td>\n")
                 
                 
         #
