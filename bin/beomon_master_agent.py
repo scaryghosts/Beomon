@@ -84,6 +84,7 @@ log_file_handle = open("/opt/sam/beomon/log/" + hostname.split(".")[0] + ".log",
 
 def log_self(message):
     log_file_handle.write(datetime.datetime.today().strftime("%Y-%m-%d %H:%M:%S") + " : " + message + "\n")
+    log_file_handle.flush()
     
     
     
@@ -627,6 +628,7 @@ for line in bpstat_out.split(os.linesep):
             ssh.close()
             
         except Exception, err:
+            print "dicks"
             sys.stderr.write(red + "Failed to find partner's status: " + str(err) + endcolor + "\n")
         
             found_partner_status = False

@@ -335,6 +335,68 @@ def show_head_page(head):
 
 
 
+# Individual detail page for a storage node
+@route("/storage/<storage>/")
+@route("/storage/<storage>")
+def show_storage_page(storage):
+    node_doc = db.storage.find_one(
+        {
+            "_id" : storage
+        }
+    )
+    
+    # Does the node exist?
+    if node_doc is None:
+        return "No such node"
+    
+    
+    try:
+        # Make things pretty...
+        node_doc["last_check"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(node_doc["last_check"]))
+        
+    except KeyError:
+        return "Details missing for " + str(node)
+    
+    
+    
+    # Make a pretty timestamp in the journal entries
+    try:
+        for entry in node_doc["journal"]:
+            entry["time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry["time"]))
+                                          
+    except KeyError:
+        node_doc["journal"] = []
+    
+    
+    
+    return bottle.template("storage", node_doc=node_doc)
+
+
+
+
+
+# Add a journal entry to a storage node
+@post("/storage/<storage>/journal/")
+@post("/storage/<storage>/journal")
+def show_storage_page(storage):
+    entry = request.forms.get("entry")
+    
+    # Replace newlines and line feeds with HTML's <br>
+    entry = entry.replace("\r\n", "<br>")
+    
+    db.storage.update(
+        { "_id" : storage },
+        { "$push" : { "journal" : { "time" : time.time(), "entry" : entry } } }
+    )
+
+
+    
+    return bottle.template("storage_journal_success", storage=storage)
+
+
+
+
+
 @route("/")
 def index():
     index_page = []
@@ -586,7 +648,7 @@ def index():
     #
     index_page.append("""
     <!-- Outer div to contain the summary tables -->
-    <div id="detail_outer" style="text-align:center; margin-left:auto; margin-right:auto;display:block;width:600px;clear:both;padding-top:25px;">
+    <div id="detail_outer" style="text-align:center; margin-left:auto; margin-right:auto;display:block;width:750px;clear:both;padding-top:25px;">
     """)
     
     
@@ -688,6 +750,92 @@ def index():
     </div> <!-- master_detail -->
     """)
     
+    
+    
+    
+    
+    #
+    # Storage node detail table
+    #
+    index_page.append("""
+    <!-- Inner div containing the storage node detail table -->
+    <div id="storage_detail" style="text-align:center; margin-left:auto; margin-right:auto; display:block;padding-top:25px;">
+    <table id="storage" style="text-align:center;">
+        <thead>
+            <tr>
+                <th colspan="7">Storage Node Details</th>
+            </tr>
+            <tr>
+                <th scope="col">Node</th>
+                <th scope="col">Active Node?</th>
+                <th scope="col">Filesystem Writable</th>
+                <th scope="col">Load Average</th>
+                <th scope="col">KB Read per Second (Last 10 Minutes)</th>
+                <th scope="col">KB Written per Second (Last 10 Minutes)</th>
+                <th scope="col">Transactions per Second (Last 10 Minutes)</th>
+            </tr>
+        </thead>
+        <tbody>
+    """)
+    
+    
+    # Loop through each node in the DB
+    for node_doc in db.storage.find().sort("_id", 1):
+        #
+        # Node
+        #
+        
+        index_page.append("<tr>\n<td><a href=\"/beomon/storage/" + node_doc["_id"] +"\">" + node_doc["_id"] + "</a></td>\n")
+        
+        
+        #
+        # Active node?
+        #
+        if node_doc["active_node"] is True:
+            index_page.append("<td>Yes</td>\n")
+            
+        else:
+            index_page.append("<td>No</td>\n")
+        
+        
+        #
+        # Filesystem Writable
+        #
+        
+        if "write_test" not in node_doc:
+            index_page.append("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
+            
+        else:
+            if node_doc["write_test"] is True:
+                index_page.append("<td>ok</td>\n")
+            
+            else:
+                index_page.append("<td style=\"font-weight:bold;color:red;\">down</td>\n")
+                
+                
+        #
+        # Load average
+        #
+        index_page.append("<td>" + node_doc["loadavg"]["1"] + "<br>" + node_doc["loadavg"]["5"] + "<br>" + node_doc["loadavg"]["15"] + "</td>\n")
+        
+        
+        #
+        # Disk IOPS
+        #
+        index_page.append("<td>" + str(node_doc["kilobytes_read_per_second"]) + "</td>")
+        index_page.append("<td>" + str(node_doc["kilobytes_written_per_second"]) + "</td>")
+        index_page.append("<td>" + str(node_doc["transactions_per_second"]) + "</td>")
+                
+                
+    # End of storage detail table
+    index_page.append("""
+        </tbody>
+    </table>
+    </div> <!-- storage_detail -->
+    """)
+    
+
+
 
 
     #

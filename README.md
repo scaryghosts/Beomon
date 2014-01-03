@@ -90,6 +90,10 @@ updates the database.  To use it pass a string of which nodes to check.
 Example: `beomon_master_agent.py 0-5,7-9`
 
 
+**beomon_storage_agent.py** is ran on each storage node of the cluster.  This program checks 
+that the filesystem hosted on it is still writable and gathers some basic performance information.
+
+
 **beomon_compute_node_agent.py** is ran on each compute node and checks the status
 of Infiniband, mount points, etc as well as gathering system information such as RAM size, 
 CPU count, etc.  It can be ran via the master/head node with:
