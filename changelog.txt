@@ -1,6 +1,4 @@
 2013-13-3: Version 5.1
-* Removed unused check_hyperthreading() function from the compute agent
-
 * Flush the log handle after every write with log_self()
 
 * Added a storage agent (see README)
