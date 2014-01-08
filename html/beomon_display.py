@@ -796,7 +796,16 @@ def index():
             
         else:
             index_page.append("<td>No</td>\n")
+            
+            
+        #
+        # Data device mounted?
+        #
         
+        if node_doc["data_device_mounted"] is False:
+            index_page.append("<td colspan='5' style='font-weight:bold;color:red;'>Data device " + node_doc["data_device"] + " is not mounted at " + node_doc["data_mount"] + "</td>\n")
+            
+            continue
         
         #
         # Filesystem Writable
@@ -825,7 +834,7 @@ def index():
         index_page.append("<td>" + str(node_doc["kilobytes_read_per_second"]) + "</td>")
         index_page.append("<td>" + str(node_doc["kilobytes_written_per_second"]) + "</td>")
         index_page.append("<td>" + str(node_doc["transactions_per_second"]) + "</td>")
-                
+                    
                 
     # End of storage detail table
     index_page.append("""
@@ -890,7 +899,8 @@ def index():
         elif "state" not in node_doc:
             index_page.append("<td style=\"font-weight:bold;color:red;\">unknown</td>\n")
             
-            for _ in range(4): index_page.append("<td></td>")
+            for _ in range(4):
+                index_page.append("<td></td>")
             
             continue
         

@@ -151,6 +151,33 @@ new_storage_data["description"] = storage_config["description"].strip('"')
 
 
 #
+# Is our device mounted?
+# 
+
+if os.path.ismount(storage_config["data_mount"]):
+    new_storage_data["data_device_mounted"] = True
+    
+else:
+    new_storage_data["data_device_mounted"] = False
+    
+    # Update the storage collection
+    db.storage.update(
+        {
+            "_id" : hostname.split(".")[0]
+        },
+        {
+            "$set" : new_storage_data
+        },
+        upsert = True,
+    )
+        
+    fatal_error("Data device " + storage_config["data_device"] + " is not mounted at " + storage_config["data_mount"])
+
+
+
+
+
+#
 # Get the current load average
 #
 
@@ -446,8 +473,6 @@ db.storage.update(
     },
     upsert = True,
 )
-
-del(new_storage_data)
 
 
 
