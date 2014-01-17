@@ -500,6 +500,9 @@ for line in bpstat_out.split(os.linesep):
     elif node in range(383, 385):
         new_compute_data["rack"] = "C-1-22"
         
+    elif node in range(386, 409):
+        new_compute_data["rack"] = "C-1-6"
+        
     else:
         new_compute_data["rack"] = "unknown"
     
