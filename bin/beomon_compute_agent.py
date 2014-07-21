@@ -13,7 +13,7 @@
 
 
 
-import sys, os, re, pymongo, subprocess, time, syslog, signal, ConfigParser, traceback
+import sys, os, re, pymongo, subprocess, time, syslog, signal, ConfigParser, traceback, glob, pwd
 from optparse import OptionParser
 from multiprocessing import cpu_count
 from string import ascii_lowercase
@@ -145,53 +145,189 @@ if match is None:
 node = re.sub("^n", "", hostname)
 
 node = int(node)
-        
 
 
+
+
+
+#
+# Node maintenance functions
+#
+
+# Remove old/stale data from /scratch
+def clean_scratch():
+    # Loop through every directory in /scratch
+    for each_dir in glob.glob("/scratch/*"):
+        #print "Checking " + each_dir
         
+        # Skip things we don't care about
+        if os.path.isdir(each_dir) is False:
+            continue
+        
+        if each_dir == "/scratch/lost+found":
+            continue
+        
+        if re.search("^/scratch/[0-9]", each_dir) is None:
+            continue
+        
+        job_id = re.sub("/scratch/", "", each_dir)
+        
+        signal.alarm(30)
     
+        # Is this job still running?
+        try:
+            qstat_info = subprocess.Popen([main_config["qstat"], job_id], stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out, err = qstat_info.communicate()
+            status = qstat_info.wait()
+                
+            signal.alarm(0)
+            
+        except Alarm:
+            sys.stderr.write("/scratch cleanup check of '" + each_dir + "': Timeout\n")
+            
+        if re.search("Unknown Job Id", err) is not None:
+            job_running = False
+            
+        else:
+            if status != 0:
+                sys.stderr.write(err + "\n")
+                sys.stderr.write("Non-zero exit status of `qstat` detected, skipping directory.\n")
+                continue
+        
+            job_running = True
+            
+        # If the job is running, how old is this directory?  Get the latest mtime from the data inside the directory to find out.
+        if job_running is False:
+            highest_mtime = 0
+            
+            for root, dirs, files in os.walk(each_dir):
+                mtime = int(os.stat(root).st_mtime)
+                
+                if mtime > highest_mtime:
+                    highest_mtime = mtime
+                    
+                for each_file in files:
+                    mtime = int(os.stat(os.path.join(root, each_file)).st_mtime)
+                    
+                    if mtime > highest_mtime:
+                        highest_mtime = mtime
+            
+            # If the highest mtime is over 24 hours ago, consider the data stale
+            time_diff = time.time() - highest_mtime
+            if time_diff > (60 * 60 * 24):
+                print "Beomon detected possible stale /scratch data at '" + each_dir + "'"
+                syslog.syslog(syslog.LOG_INFO, "Beomon detected possible stale /scratch data at '" + each_dir + "'")
+                
+                
+                
+                
+                
+# Kill lingering processes from old jobs
+def kill_old_processes():
+    user_processes = {}
+    lingering_processes = {}
+    
+    for pid_dir in glob.glob("/proc/*"):
+        # Skip things that are not PID directories
+        try:
+            pid = pid_dir.split("/")[2]
+            
+        except IndexError:
+            continue
+        
+        try:
+            int(pid)
+            
+        except ValueError:
+            continue
+        
+        
+        # The process could go away during this section, that's ok just move on to the next one
+        try:
+            proc_status_data = open("/proc/" + pid + "/status").read()
+            
+        except IOError:
+            continue
+        
+        # Find the process name and UID it is running as
+        for line in proc_status_data.split(os.linesep):
+            process_name_line_match = re.match("Name:\s+(.+)", line)
+            
+            if process_name_line_match is not None:
+                process_name = process_name_line_match.group(1)
+            
+            uid_line_match = re.match("Uid:\s+([0-9]+)\s+", line)
+            
+            if uid_line_match is not None:
+                uid = uid_line_match.group(1)
+                break
+                
+        # Skip system users
+        if int(uid) < 1000:
+            continue
+        
+        # Get the username from the UID
+        try:
+            username = pwd.getpwuid(int(uid))[0]
+            
+        except KeyError:
+            fatal_error("Unable to determine username of UID " + uid, None)
+            
+        if username not in user_processes:
+            user_processes[username] = {}
+            
+        user_processes[username][pid] = process_name
+        
+        
+    # Loop through every user running a process and see if they are running a job on this node
+    for user in user_processes:
+        #print "Checking for possible lingering processes of user " + user
+        
+        signal.alarm(60)
+    
+        # Is the user running on job on this node?
+        try:
+            qstat_info = subprocess.Popen([main_config["qstat"], "-n", "-u", user], stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            qstat_out, qstat_err = qstat_info.communicate()
+            status = qstat_info.wait()
+                
+            signal.alarm(0)
+            
+            if status != 0:
+                sys.stderr.write("Non-zero exit status of `qstat` detected, skipping user.\n")
+                continue
+            
+        except Alarm:
+            sys.stderr.write("Failed to check processes of user '" + user +"': Timeout\n")
+            
+        
+        job_active = False
+        for line in qstat_out.split(os.linesep):
+            if re.search("\s+" + hostname + "/", line) is not None or re.search("\+" + hostname + "/", line) is not None:
+                job_active = True
+                break
+                
+                
+        if job_active is False:
+            syslog.syslog(syslog.LOG_INFO, "Beomon detected suspected lingering process(es) of user '" + user + "':" + str(user_processes[user]))
+            
+            print "Found suspected lingering process(es) of user '" + user + "':"
+            
+            lingering_processes[user] = user_processes[user]
+            
+            for pid in user_processes[user]:
+                print "     " + pid + " : " + user_processes[user][pid]
+                
+            
+    new_compute_data["lingering_processes"] = lingering_processes
+            
+
+
+
+
 #    
 # Health checks    
 #
-        
-# Moab
-def check_moab():
-    signal.alarm(30)
-    
-    try:
-        with open(os.devnull, "w") as devnull:
-            subprocess.check_call(["/bin/true"], stdin=None, stdout=devnull, stderr=devnull, shell=False)
-            
-        signal.alarm(0)
-            
-        sys.stdout.write("Moab: ok\n")
-        
-        new_compute_data["moab"] = True
-        
-    except Alarm:
-        sys.stdout.write("Moab: Timeout\n")
-        
-        new_compute_data["moab"] = False
-        
-    except subprocess.CalledProcessError:
-        sys.stdout.write(red + "Moab: down\n" + endcolor)
-        
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Moab in state 'down'")
-        
-        new_compute_data["moab"] = False
-            
-    except:
-        syslog.syslog(syslog.LOG_ERR, "NOC-NETCOOL-TICKET: Node " + str(node) + " has Moab in state 'sysfail'")
-        
-        new_compute_data["moab"] = False
-        
-        fatal_error("MOAB check failed", None)
-        
-    return None
-        
-        
-
-        
         
 # Infiniband
 def infiniband_check():
@@ -228,7 +364,7 @@ def infiniband_check():
                     new_compute_data["infiniband"] = False
             
         except Alarm:
-            sys.stdout.write(red + "Infiniband: Timeout\n" + endcolor)
+            sys.stderr.write(red + "Infiniband: Timeout\n" + endcolor)
             
             new_compute_data["infiniband"] = "timeout"
             
@@ -303,7 +439,7 @@ def check_tempurature():
                 new_compute_data["tempurature"] = "unknown"
                 
     except Alarm:
-        sys.stdout.write("Tempurature: Timeout")
+        sys.stderr.write("Tempurature: Timeout")
         
         new_compute_data["tempurature"] = "timeout"
         
@@ -730,7 +866,6 @@ def check_missing_parts(db):
 if options.daemonize == False:
     db = connect_mongo()
     
-    check_moab()
     infiniband_check()
     #check_tempurature()
     check_filesystems()
@@ -741,6 +876,8 @@ if options.daemonize == False:
     scratch_size()
     get_seral_number()
     check_missing_parts(db)
+    #clean_scratch()
+    kill_old_processes()
     
     # Report that we've now checked ourself
     new_compute_data["last_check"] = int(time.time())
@@ -832,7 +969,6 @@ else:
     # Connect to the DB and get the initial info
     db = connect_mongo()
 
-    check_moab()
     #check_tempurature()
     check_filesystems()
     get_cpu_info()
@@ -846,16 +982,41 @@ else:
     # Give IB time to come up
     time.sleep(30)
     
-    # Mark that we need to check IB at the start of the next loop
+    # Mark that we need to check IB and clean /scratch at the start of the next loop
     last_ib_check = 0
+    last_scratch_clean = 0
+    last_old_process_check = 0
     
-    # Keep checking in and make sure IB is up
+    
+    # Keep checking in, make sure IB is up, and do our maintenance tasks
     while True:
         # Only check IB every 6 hours
         if (int(time.time()) - last_ib_check) > (60 * 60 * 6):
             infiniband_check()
             
             last_ib_check = int(time.time())
+            
+        ## Only clean scratch every 6 hours
+        #if (int(time.time()) - last_scratch_clean) > (60 * 60 * 6):   
+            #clean_scratch()
+            
+            #last_scratch_clean = int(time.time())
+            
+        # Only kill old processes once every 6 hours
+        if (int(time.time()) - last_old_process_check) > (60 * 60 * 6):   
+            # Fork a child to do this check as it can take a significant amount of time
+            # and can throw off the master agent's "orphan node" logic since we would have
+            # to wait for it if we didn't fork and make us check in later than we should
+            pid = os.fork()
+    
+            if pid == 0:
+                os.setsid()
+                
+                kill_old_processes()
+                
+                sys.exit()
+            
+            last_old_process_check = int(time.time())
         
         # Report that we've now checked ourself
         new_compute_data["last_check"] = int(time.time())

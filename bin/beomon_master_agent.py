@@ -494,11 +494,8 @@ for line in bpstat_out.split(os.linesep):
     elif node in range(351, 379):
         new_compute_data["rack"] = "C-1-24"
         
-    elif node in range(379, 383):
-        new_compute_data["rack"] = "C-1-21"
-        
-    elif node in range(383, 385):
-        new_compute_data["rack"] = "C-1-22"
+    elif node in range(379, 386):
+        new_compute_data["rack"] = "C-1-2"
         
     elif node in range(386, 409):
         new_compute_data["rack"] = "C-1-6"
@@ -631,7 +628,6 @@ for line in bpstat_out.split(os.linesep):
             ssh.close()
             
         except Exception, err:
-            print "dicks"
             sys.stderr.write(red + "Failed to find partner's status: " + str(err) + endcolor + "\n")
         
             found_partner_status = False
