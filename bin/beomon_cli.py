@@ -13,7 +13,14 @@
 
 
 
-import sys, os, re, pymongo, time, ConfigParser, locale, traceback
+import sys
+import os
+import re
+import pymongo
+import time
+import ConfigParser
+import locale
+import traceback
 from optparse import OptionParser
 
 

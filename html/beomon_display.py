@@ -15,9 +15,23 @@
 
 import sys
 sys.path.append("/opt/sam/beomon/bin")
-import os, re, pymongo, time, locale, signal, subprocess, ConfigParser, traceback
+import os
+import re
+import pymongo
+import time
+import locale
+import signal
+import subprocess
+import ConfigParser
+import traceback
 import bottle
-from bottle import Bottle, run, template, route, post, get, request
+from bottle import Bottle
+from bottle import run
+from bottle import template
+from bottle import route
+from bottle import post
+from bottle import get
+from bottle import request
 from optparse import OptionParser
 
 

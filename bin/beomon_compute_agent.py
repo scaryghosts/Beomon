@@ -13,7 +13,18 @@
 
 
 
-import sys, os, re, pymongo, subprocess, time, syslog, signal, ConfigParser, traceback, glob, pwd
+import sys
+import os
+import re
+import pymongo
+import subprocess
+import time
+import syslog
+import signal
+import ConfigParser
+import traceback
+import glob
+import pwd
 from optparse import OptionParser
 from multiprocessing import cpu_count
 from string import ascii_lowercase

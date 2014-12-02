@@ -13,7 +13,17 @@
 
 
 
-import sys, os, re, pymongo, subprocess, time, syslog, signal, ConfigParser, traceback, datetime
+import sys
+import os
+import re
+import pymongo
+import subprocess
+import time
+import syslog
+import signal
+import ConfigParser
+import traceback
+import datetime
 from optparse import OptionParser
 
 

@@ -13,7 +13,11 @@
 
 
 
-import sys, os, pymongo, time, ConfigParser
+import sys
+import os
+import pymongo
+import time
+import ConfigParser
 from optparse import OptionParser
 
 

@@ -16,7 +16,15 @@
 
 
 
-import sys, os, re, subprocess, syslog, signal, ConfigParser, pymongo, traceback
+import sys
+import os
+import re
+import subprocess
+import syslog
+import signal
+import ConfigParser
+import pymongo
+import traceback
 import xml.etree.ElementTree as ET
 from optparse import OptionParser
 
