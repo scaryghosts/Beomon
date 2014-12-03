@@ -295,10 +295,6 @@ def show_head_page(head):
 
 
 
-    # Do we have any zombies?
-    if node_doc.get("zombies") is None:
-        node_doc["zombies"] = []
-
 
 
     # Make a pretty timestamp in the journal entries
@@ -311,7 +307,7 @@ def show_head_page(head):
 
 
 
-    return bottle.template("head", node_doc=node_doc, bad_files=bad_files, zombies=node_doc["zombies"])
+    return bottle.template("head", node_doc=node_doc, bad_files=bad_files)
 
 
 
