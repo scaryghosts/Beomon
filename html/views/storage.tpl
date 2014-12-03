@@ -1,37 +1,37 @@
-<!DOCTYPE html>                                                                                                                                                                     
-<html>                                                                                                                                                                              
-    <head>                                                                                                                                                                          
-        <link href="/static/style.css" media="all" rel="stylesheet" type="text/css">                                                                                                
+<!DOCTYPE html>
+<html>
+    <head>
+        <link href="/static/style.css" media="all" rel="stylesheet" type="text/css">
         <title>{{ node_doc["_id"] }}</title>
-    </head>                                                                                                                                                                         
-                                                                                                                                                                                    
-                                                                                                                                                                                    
-                                                                                                                                                                                    
+    </head>
+
+
+
     <body>
         <h2>Node {{ node_doc["_id"] }}</h2>
-        
-        
+
+
         <!-- Health information -->
         <p>
         %if node_doc["write_test"] is True:
             Filesystem writable: ok<br>
-            
+
         %else:
             <span style="color:red">Filesystem writable: fail</span><br>
-            
+
         %end
-        
-        
+
+
         Load average 1 minute: {{ node_doc["loadavg"]["1"] }}<br>
         Load average 5 minutes: {{ node_doc["loadavg"]["5"] }}<br>
         Load average 15 minutes: {{ node_doc["loadavg"]["15"] }}<br>
-        
-        
+
+
         KB Read per Second (Last 10 Minutes): {{ node_doc["kilobytes_read_per_second"] }}<br>
         KB Written per Second (Last 10 Minutes): {{ node_doc["kilobytes_written_per_second"] }}<br>
         Transactions per Second (Last 10 Minutes): {{ node_doc["transactions_per_second"] }}<br>
-                
-        
+
+
         <!-- Basic information of the node -->
         <div style="text-align: left; max-width: 600px;">
             Description: {{ node_doc["description"] }}<br>
@@ -42,7 +42,7 @@
         </p>
 
 
-        
+
         <!-- Journal section -->
         <p>
         <span style="font-weight:bold;">Journal:</span>
@@ -52,7 +52,7 @@
                     <div>
                         {{ entry["time"] }}:
                     </div>
-                    
+
                     <div>
                         {{! entry["entry"] }}
                     </div>
@@ -60,11 +60,11 @@
                 ----------------------------------
                 <br>
             %end
-            
+
         %else:
             <br>No journal entries<br>
         %end
-        
+
         <br>
         New journal entry:
         <form action="/beomon/storage/{{node_doc['_id']}}/journal" method="post">
