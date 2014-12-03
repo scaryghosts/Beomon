@@ -693,7 +693,6 @@ if options.daemonize == False:
     db = connect_mongo()
 
     infiniband_check()
-    #check_tempurature()
     check_filesystems()
     get_cpu_info()
     get_gpu_info()
@@ -702,8 +701,6 @@ if options.daemonize == False:
     scratch_size()
     get_seral_number()
     check_missing_parts(db)
-    #clean_scratch()
-    kill_old_processes()
 
     # Report that we've now checked ourself
     new_compute_data["last_check"] = int(time.time())
@@ -795,7 +792,6 @@ else:
     # Connect to the DB and get the initial info
     db = connect_mongo()
 
-    #check_tempurature()
     check_filesystems()
     get_cpu_info()
     get_gpu_info()
@@ -821,28 +817,6 @@ else:
             infiniband_check()
 
             last_ib_check = int(time.time())
-
-        ## Only clean scratch every 6 hours
-        #if (int(time.time()) - last_scratch_clean) > (60 * 60 * 6):
-            #clean_scratch()
-
-            #last_scratch_clean = int(time.time())
-
-        # Only kill old processes once every 6 hours
-        if (int(time.time()) - last_old_process_check) > (60 * 60 * 6):
-            # Fork a child to do this check as it can take a significant amount of time
-            # and can throw off the master agent's "orphan node" logic since we would have
-            # to wait for it if we didn't fork and make us check in later than we should
-            pid = os.fork()
-
-            if pid == 0:
-                os.setsid()
-
-                kill_old_processes()
-
-                sys.exit()
-
-            last_old_process_check = int(time.time())
 
         # Report that we've now checked ourself
         new_compute_data["last_check"] = int(time.time())
